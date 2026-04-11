@@ -32,6 +32,13 @@ pub fn transition_task(
     task.transition_status(request.status, request.changed_at);
 }
 
+pub fn add_task_dependency(
+    task: &mut Task,
+    dependency: Uuid,
+) {
+    task.add_dependency(dependency);
+}
+
 pub fn compat_round_trip(task: &Task) -> Result<Task, CompatibilityError> {
     let encoded = encode_task(task);
     decode_task(&encoded.task_data)
@@ -47,8 +54,8 @@ pub fn sample_task() -> Task {
 #[cfg(test)]
 mod tests {
     use super::{
-        compat_round_trip, create_task, healthcheck, sample_task,
-        transition_task, CreateTaskRequest, TransitionTaskRequest,
+        add_task_dependency, compat_round_trip, create_task, healthcheck,
+        sample_task, transition_task, CreateTaskRequest, TransitionTaskRequest,
     };
     use chrono::{TimeZone, Utc};
     use taskwarrior_core::TaskStatus;
@@ -121,5 +128,20 @@ mod tests {
         assert_eq!(decoded.status, TaskStatus::Completed);
         assert_eq!(decoded.modified, Some(timestamp(300)));
         assert_eq!(decoded.end, Some(timestamp(300)));
+    }
+
+    #[test]
+    fn product_facing_dependency_update_round_trips_through_compat() {
+        let mut task = create_task(CreateTaskRequest {
+            id: Uuid::from_u128(5),
+            description: "Dependency from API".to_string(),
+        });
+        let dependency = Uuid::from_u128(6);
+
+        add_task_dependency(&mut task, dependency);
+
+        let decoded = compat_round_trip(&task).unwrap();
+
+        assert!(decoded.dependencies.contains(&dependency));
     }
 }

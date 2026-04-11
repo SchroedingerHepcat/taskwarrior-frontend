@@ -19,6 +19,7 @@ const PROP_END: &str = "end";
 const PROP_WAIT: &str = "wait";
 const ANNOTATION_PREFIX: &str = "annotation_";
 const TAG_PREFIX: &str = "tag_";
+const DEP_PREFIX: &str = "dep_";
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum CompatibilityError {
@@ -74,6 +75,15 @@ pub fn decode_task(task_data: &TaskData) -> Result<Task, CompatibilityError> {
                 parse_timestamp(key, raw_entry)?,
                 value.clone(),
             ));
+            continue;
+        }
+
+        if let Some(raw_dependency) = key.strip_prefix(DEP_PREFIX) {
+            if let Ok(dependency) =
+                taskchampion::Uuid::parse_str(raw_dependency)
+            {
+                task.add_dependency(dependency);
+            }
             continue;
         }
 
@@ -145,6 +155,14 @@ pub fn encode_task(task: &Task) -> EncodedTask {
     for tag in &task.tags {
         task_data.update(
             format!("{TAG_PREFIX}{tag}"),
+            Some(String::new()),
+            &mut operations,
+        );
+    }
+
+    for dependency in &task.dependencies {
+        task_data.update(
+            format!("{DEP_PREFIX}{dependency}"),
             Some(String::new()),
             &mut operations,
         );
@@ -241,14 +259,15 @@ fn is_known_property(key: &str) -> bool {
             | PROP_WAIT
     ) || key.starts_with(ANNOTATION_PREFIX)
         || key.starts_with(TAG_PREFIX)
+        || key.starts_with(DEP_PREFIX)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
         decode_task, encode_task, CompatibilityError, ANNOTATION_PREFIX,
-        PROP_DESCRIPTION, PROP_DUE, PROP_END, PROP_ENTRY, PROP_MODIFIED,
-        PROP_STATUS, PROP_WAIT, TAG_PREFIX,
+        DEP_PREFIX, PROP_DESCRIPTION, PROP_DUE, PROP_END, PROP_ENTRY,
+        PROP_MODIFIED, PROP_STATUS, PROP_WAIT, TAG_PREFIX,
     };
     use taskchampion::chrono::{DateTime, TimeZone, Utc};
     use taskchampion::{Operation, Operations, TaskData, Uuid};
@@ -295,6 +314,10 @@ mod tests {
                     &format!("{ANNOTATION_PREFIX}150"),
                     "first note",
                 ),
+                (
+                    &format!("{DEP_PREFIX}{}", Uuid::from_u128(20)),
+                    "",
+                ),
                 (&format!("{TAG_PREFIX}home"), ""),
                 ("jira.id", "TW-1"),
             ],
@@ -313,6 +336,7 @@ mod tests {
         assert_eq!(task.due, Some(timestamp(175)));
         assert_eq!(task.end, Some(timestamp(190)));
         assert_eq!(task.wait, Some(timestamp(200)));
+        assert!(task.dependencies.contains(&Uuid::from_u128(20)));
         assert_eq!(
             task.annotations,
             vec![Annotation::new(
@@ -381,6 +405,7 @@ mod tests {
         task.due = Some(timestamp(175));
         task.end = Some(timestamp(190));
         task.wait = Some(timestamp(200));
+        task.add_dependency(Uuid::from_u128(21));
         task.add_annotation(Annotation::new(timestamp(150), "done"));
         task.add_tag("work");
         task.set_user_defined_attribute("jira.id", "TW-13");
@@ -420,6 +445,13 @@ mod tests {
             Some("200")
         );
         assert_eq!(
+            encoded.task_data.get(format!(
+                "{DEP_PREFIX}{}",
+                Uuid::from_u128(21)
+            )),
+            Some(""),
+        );
+        assert_eq!(
             encoded
                 .task_data
                 .get(format!("{ANNOTATION_PREFIX}150")),
@@ -450,6 +482,7 @@ mod tests {
         task.due = Some(timestamp(12));
         task.end = Some(timestamp(13));
         task.wait = Some(timestamp(20));
+        task.add_dependency(Uuid::from_u128(22));
         task.add_annotation(Annotation::new(timestamp(15), "kept"));
         task.add_tag("home");
         task.set_user_defined_attribute("jira.id", "TW-14");

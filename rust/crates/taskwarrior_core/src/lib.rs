@@ -47,6 +47,7 @@ pub struct Task {
     pub due: Option<DateTime<Utc>>,
     pub end: Option<DateTime<Utc>>,
     pub wait: Option<DateTime<Utc>>,
+    pub dependencies: BTreeSet<Uuid>,
     pub annotations: Vec<Annotation>,
     pub tags: BTreeSet<String>,
     pub user_defined_attributes: BTreeMap<String, String>,
@@ -66,6 +67,7 @@ impl Task {
             due: None,
             end: None,
             wait: None,
+            dependencies: BTreeSet::new(),
             annotations: Vec::new(),
             tags: BTreeSet::new(),
             user_defined_attributes: BTreeMap::new(),
@@ -109,6 +111,20 @@ impl Task {
         self.tags.insert(tag.into());
     }
 
+    pub fn add_dependency(
+        &mut self,
+        dependency: Uuid,
+    ) {
+        self.dependencies.insert(dependency);
+    }
+
+    pub fn remove_dependency(
+        &mut self,
+        dependency: Uuid,
+    ) {
+        self.dependencies.remove(&dependency);
+    }
+
     pub fn set_user_defined_attribute(
         &mut self,
         key: impl Into<String>,
@@ -145,6 +161,7 @@ mod tests {
         assert_eq!(task.due, None);
         assert_eq!(task.end, None);
         assert_eq!(task.wait, None);
+        assert_eq!(task.dependencies, BTreeSet::new());
         assert_eq!(task.annotations, Vec::new());
         assert_eq!(task.tags, BTreeSet::new());
         assert_eq!(
@@ -163,6 +180,23 @@ mod tests {
         assert_eq!(task.due, Some(timestamp(200)));
         assert_eq!(task.end, None);
         assert_eq!(task.wait, None);
+    }
+
+    #[test]
+    fn dependencies_are_deduplicated_and_removable() {
+        let mut task = Task::new(Uuid::from_u128(9), "Dependency test");
+        let dep_a = Uuid::from_u128(10);
+        let dep_b = Uuid::from_u128(11);
+
+        task.add_dependency(dep_a);
+        task.add_dependency(dep_a);
+        task.add_dependency(dep_b);
+        task.remove_dependency(dep_a);
+
+        assert_eq!(
+            task.dependencies,
+            BTreeSet::from([dep_b])
+        );
     }
 
     #[test]
