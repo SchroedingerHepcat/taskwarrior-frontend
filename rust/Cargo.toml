@@ -1,6 +1,6 @@
 [workspace]
 members = [
-  "crates/core",
+  "crates/taskwarrior_core",
   "crates/taskwarrior_compat",
   "crates/server",
 ]
