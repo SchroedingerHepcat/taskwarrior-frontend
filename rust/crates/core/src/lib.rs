@@ -1,29 +1,155 @@
 //! Core task domain types for the compatibility spike.
 
+use chrono::{DateTime, Utc};
+use std::collections::{BTreeMap, BTreeSet};
+use uuid::Uuid;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Task {
-    pub id: String,
+pub struct Annotation {
+    pub entry: DateTime<Utc>,
     pub description: String,
 }
 
-impl Task {
-    pub fn new(id: impl Into<String>, description: impl Into<String>) -> Self {
+impl Annotation {
+    pub fn new(entry: DateTime<Utc>, description: impl Into<String>) -> Self {
         Self {
-            id: id.into(),
+            entry,
             description: description.into(),
         }
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TaskStatus {
+    Pending,
+    Completed,
+    Deleted,
+    Recurring,
+    Unknown(String),
+}
+
+impl TaskStatus {
+    pub fn is_terminal(&self) -> bool {
+        matches!(self, Self::Completed | Self::Deleted)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Task {
+    pub id: Uuid,
+    pub description: String,
+    pub status: TaskStatus,
+    pub entry: Option<DateTime<Utc>>,
+    pub wait: Option<DateTime<Utc>>,
+    pub annotations: Vec<Annotation>,
+    pub tags: BTreeSet<String>,
+    pub user_defined_attributes: BTreeMap<String, String>,
+}
+
+impl Task {
+    pub fn new(id: Uuid, description: impl Into<String>) -> Self {
+        Self {
+            id,
+            description: description.into(),
+            status: TaskStatus::Pending,
+            entry: None,
+            wait: None,
+            annotations: Vec::new(),
+            tags: BTreeSet::new(),
+            user_defined_attributes: BTreeMap::new(),
+        }
+    }
+
+    pub fn is_waiting_at(&self, now: DateTime<Utc>) -> bool {
+        self.wait.is_some_and(|wait| wait > now)
+    }
+
+    pub fn add_annotation(&mut self, annotation: Annotation) {
+        self.annotations.push(annotation);
+        self.annotations.sort_by_key(|annotation| annotation.entry);
+    }
+
+    pub fn add_tag(&mut self, tag: impl Into<String>) {
+        self.tags.insert(tag.into());
+    }
+
+    pub fn set_user_defined_attribute(&mut self, key: impl Into<String>, value: impl Into<String>) {
+        self.user_defined_attributes
+            .insert(key.into(), value.into());
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::Task;
+    use super::{Annotation, Task, TaskStatus};
+    use chrono::{TimeZone, Utc};
+    use std::collections::{BTreeMap, BTreeSet};
+    use uuid::Uuid;
+
+    fn timestamp(secs: i64) -> chrono::DateTime<Utc> {
+        Utc.timestamp_opt(secs, 0).single().unwrap()
+    }
 
     #[test]
-    fn constructs_task_from_owned_values() {
-        let task = Task::new("task-1", "Compatibility spike");
+    fn constructs_task_with_pending_defaults() {
+        let task = Task::new(Uuid::from_u128(1), "Compatibility spike");
 
-        assert_eq!(task.id, "task-1");
+        assert_eq!(task.id, Uuid::from_u128(1));
         assert_eq!(task.description, "Compatibility spike");
+        assert_eq!(task.status, TaskStatus::Pending);
+        assert_eq!(task.entry, None);
+        assert_eq!(task.wait, None);
+        assert_eq!(task.annotations, Vec::new());
+        assert_eq!(task.tags, BTreeSet::new());
+        assert_eq!(task.user_defined_attributes, BTreeMap::new());
+    }
+
+    #[test]
+    fn waiting_is_based_on_wait_timestamp() {
+        let mut task = Task::new(Uuid::from_u128(2), "Wait test");
+        task.wait = Some(timestamp(200));
+
+        assert!(task.is_waiting_at(timestamp(100)));
+        assert!(!task.is_waiting_at(timestamp(200)));
+        assert!(!task.is_waiting_at(timestamp(300)));
+    }
+
+    #[test]
+    fn annotations_are_kept_in_timestamp_order() {
+        let mut task = Task::new(Uuid::from_u128(3), "Annotation test");
+        task.add_annotation(Annotation::new(timestamp(300), "later"));
+        task.add_annotation(Annotation::new(timestamp(100), "earlier"));
+
+        assert_eq!(
+            task.annotations,
+            vec![
+                Annotation::new(timestamp(100), "earlier"),
+                Annotation::new(timestamp(300), "later"),
+            ],
+        );
+    }
+
+    #[test]
+    fn tags_and_user_defined_attributes_are_deduplicated_by_key() {
+        let mut task = Task::new(Uuid::from_u128(4), "Metadata test");
+        task.add_tag("home");
+        task.add_tag("home");
+        task.set_user_defined_attribute("jira.id", "TW-42");
+        task.set_user_defined_attribute("jira.id", "TW-43");
+
+        assert_eq!(task.tags, BTreeSet::from(["home".to_string()]));
+        assert_eq!(
+            task.user_defined_attributes,
+            BTreeMap::from([("jira.id".to_string(), "TW-43".to_string())]),
+        );
+    }
+
+    #[test]
+    fn unknown_status_is_not_treated_as_terminal() {
+        let status = TaskStatus::Unknown("blocked-elsewhere".to_string());
+
+        assert!(!status.is_terminal());
+        assert!(TaskStatus::Completed.is_terminal());
+        assert!(TaskStatus::Deleted.is_terminal());
     }
 }

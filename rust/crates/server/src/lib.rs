@@ -1,23 +1,20 @@
 //! Server-facing API boundary placeholders for the spike.
 
-use core::Task;
-use taskwarrior_compat::TaskwarriorRecord;
+use taskwarrior_core::Task;
+use uuid::Uuid;
 
 pub fn healthcheck() -> &'static str {
     "ok"
 }
 
 pub fn sample_task() -> Task {
-    let record = TaskwarriorRecord {
-        description: "Initial compatibility spike".to_string(),
-    };
-
-    record.into_task("server-sample")
+    Task::new(Uuid::from_u128(1), "Initial compatibility spike")
 }
 
 #[cfg(test)]
 mod tests {
     use super::{healthcheck, sample_task};
+    use uuid::Uuid;
 
     #[test]
     fn healthcheck_is_stable() {
@@ -28,7 +25,7 @@ mod tests {
     fn sample_task_is_constructed_via_compat_layer() {
         let task = sample_task();
 
-        assert_eq!(task.id, "server-sample");
+        assert_eq!(task.id, Uuid::from_u128(1));
         assert_eq!(task.description, "Initial compatibility spike");
     }
 }

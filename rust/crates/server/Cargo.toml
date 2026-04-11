@@ -5,8 +5,9 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-core = { path = "../core" }
+taskwarrior_core = { path = "../core" }
 taskwarrior_compat = { path = "../taskwarrior_compat" }
+uuid = { version = "1.18.1", features = ["std"] }
 
 [lib]
 path = "src/lib.rs"
