@@ -173,6 +173,44 @@ Option 2 is the best fit for each target:
   One semantic core is cheaper to evolve and test than multiple client-side
   interpretations of Taskwarrior behavior.
 
+## Layer Decision
+
+The working decision is to reuse existing TaskChampion and
+Taskwarrior-compatible logic where it already provides the semantic authority,
+instead of casually reimplementing that logic in this repository.
+
+That decision does not mean raw TaskChampion objects become the application
+model across all layers.
+
+The intended layer responsibilities are:
+
+- `taskwarrior_core`
+  Owns product-facing task structures and service-level operations, while
+  remaining intentionally aligned with Taskwarrior-compatible semantics.
+- `taskwarrior_compat`
+  Owns translation to and from TaskChampion-compatible data and should reuse
+  TaskChampion mutation and semantic logic where possible.
+- `server`
+  Owns backend-facing API operations and should expose GUI-friendly operations,
+  not raw TaskChampion storage or replica objects.
+- `flutter_app`
+  Owns presentation and user interaction only. It must not implement
+  Taskwarrior semantics itself.
+
+## Consequences
+
+- Frontend actions should translate into backend operations, not into direct
+  client-side Taskwarrior logic.
+- Backend operations should translate into TaskChampion-aware mutations through
+  the compatibility layer where possible.
+- Reuse of upstream TaskChampion logic is preferred over duplicating existing
+  semantic behavior in this repository.
+- Raw TaskChampion storage and replica objects should not leak across the API
+  boundary.
+- The project still needs a product-facing task model and API shape, because
+  dashboards, boards, filters, and future integrations should not be forced to
+  couple directly to low-level TaskChampion object shapes.
+
 ## What Still Needs Proof
 
 The recommendation is directional, not proven. The following items still need
@@ -185,8 +223,8 @@ evidence:
    The compatibility layer must demonstrate recurring tasks, scheduled tasks,
    status transitions, and metadata round-tripping with automated tests.
 3. TaskChampion boundary proof
-   The project must confirm exactly which TaskChampion concepts are adopted as
-   internal primitives and which remain translation concerns.
+   The project must confirm exactly which TaskChampion concepts are reused as
+   semantic authority and which remain product-layer translation concerns.
 4. API boundary proof
    The server API must be validated against real client needs so that it does
    not expose storage details or omit necessary semantic operations.
@@ -204,17 +242,19 @@ code and tests in this repository:
 - `entry`
 - `modified`
 - `due`
+- `end`
 - `wait`
 - `annotation_*`
 - `tag_*`
 - user-defined attributes outside the known property set
+- basic core status transitions for `end` and `modified`
 
 The following areas are still open and should not be treated as proven yet:
 
 - recurring task semantics beyond preserving the `recurring` status value
 - scheduled and waiting lifecycle rules beyond basic timestamp mapping
 - dependency semantics and synthetic tags
-- task completion and deletion side effects such as `end`
+- task completion and deletion side effects beyond basic `end` timestamping
 - storage, replica orchestration, and sync behavior
 
 ## Main Risks In The Recommended Architecture
