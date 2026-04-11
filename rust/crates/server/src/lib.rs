@@ -8,7 +8,10 @@ pub fn healthcheck() -> &'static str {
 }
 
 pub fn sample_task() -> Task {
-    Task::new(Uuid::from_u128(1), "Initial compatibility spike")
+    Task::new(
+        Uuid::from_u128(1),
+        "Initial compatibility spike",
+    )
 }
 
 #[cfg(test)]
@@ -26,6 +29,9 @@ mod tests {
         let task = sample_task();
 
         assert_eq!(task.id, Uuid::from_u128(1));
-        assert_eq!(task.description, "Initial compatibility spike");
+        assert_eq!(
+            task.description,
+            "Initial compatibility spike"
+        );
     }
 }

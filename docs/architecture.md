@@ -194,6 +194,29 @@ evidence:
    The backend needs a concrete persistence and synchronization strategy that
    does not depend on external file sync and does not undermine compatibility.
 
+## Current TaskChampion Proof Status
+
+The following TaskChampion property mappings are currently considered proven by
+code and tests in this repository:
+
+- `description`
+- `status`
+- `entry`
+- `modified`
+- `due`
+- `wait`
+- `annotation_*`
+- `tag_*`
+- user-defined attributes outside the known property set
+
+The following areas are still open and should not be treated as proven yet:
+
+- recurring task semantics beyond preserving the `recurring` status value
+- scheduled and waiting lifecycle rules beyond basic timestamp mapping
+- dependency semantics and synthetic tags
+- task completion and deletion side effects such as `end`
+- storage, replica orchestration, and sync behavior
+
 ## Main Risks In The Recommended Architecture
 
 - The team may underestimate Taskwarrior semantic complexity and design a core

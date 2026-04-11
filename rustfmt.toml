@@ -1,0 +1,14 @@
+max_width = 80
+use_small_heuristics = "Off"
+
+# Keep argument and data lists vertical earlier, to better align with the
+# repository's strict 80-column rule.
+fn_call_width = 40
+struct_lit_width = 18
+struct_variant_width = 35
+array_width = 40
+chain_width = 50
+fn_params_layout = "Vertical"
+
+edition = "2021"
+style_edition = "2021"

@@ -13,6 +13,8 @@ use taskwarrior_core::{Annotation, Task, TaskStatus};
 const PROP_DESCRIPTION: &str = "description";
 const PROP_STATUS: &str = "status";
 const PROP_ENTRY: &str = "entry";
+const PROP_MODIFIED: &str = "modified";
+const PROP_DUE: &str = "due";
 const PROP_WAIT: &str = "wait";
 const ANNOTATION_PREFIX: &str = "annotation_";
 const TAG_PREFIX: &str = "tag_";
@@ -23,10 +25,16 @@ pub enum CompatibilityError {
 }
 
 impl Display for CompatibilityError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result {
         match self {
             Self::InvalidTimestamp { property, value } => {
-                write!(f, "invalid timestamp for {property}: {value}")
+                write!(
+                    f,
+                    "invalid timestamp for {property}: {value}"
+                )
             }
         }
     }
@@ -43,10 +51,14 @@ pub struct EncodedTask {
 pub fn decode_task(task_data: &TaskData) -> Result<Task, CompatibilityError> {
     let mut task = Task::new(
         task_data.get_uuid(),
-        task_data.get(PROP_DESCRIPTION).unwrap_or_default(),
+        task_data
+            .get(PROP_DESCRIPTION)
+            .unwrap_or_default(),
     );
     task.status = decode_status(task_data.get(PROP_STATUS));
     task.entry = decode_timestamp(task_data, PROP_ENTRY)?;
+    task.modified = decode_timestamp(task_data, PROP_MODIFIED)?;
+    task.due = decode_timestamp(task_data, PROP_DUE)?;
     task.wait = decode_timestamp(task_data, PROP_WAIT)?;
 
     for (key, value) in task_data.iter() {
@@ -85,12 +97,41 @@ pub fn encode_task(task: &Task) -> EncodedTask {
         Some(encode_status(&task.status).to_string()),
         &mut operations,
     );
-    set_timestamp(&mut task_data, PROP_ENTRY, task.entry, &mut operations);
-    set_timestamp(&mut task_data, PROP_WAIT, task.wait, &mut operations);
+    set_timestamp(
+        &mut task_data,
+        PROP_ENTRY,
+        task.entry,
+        &mut operations,
+    );
+    set_timestamp(
+        &mut task_data,
+        PROP_MODIFIED,
+        task.modified,
+        &mut operations,
+    );
+    set_timestamp(
+        &mut task_data,
+        PROP_DUE,
+        task.due,
+        &mut operations,
+    );
+    set_timestamp(
+        &mut task_data,
+        PROP_WAIT,
+        task.wait,
+        &mut operations,
+    );
 
     for annotation in &task.annotations {
-        let key = format!("{ANNOTATION_PREFIX}{}", annotation.entry.timestamp(),);
-        task_data.update(key, Some(annotation.description.clone()), &mut operations);
+        let key = format!(
+            "{ANNOTATION_PREFIX}{}",
+            annotation.entry.timestamp(),
+        );
+        task_data.update(
+            key,
+            Some(annotation.description.clone()),
+            &mut operations,
+        );
     }
 
     for tag in &task.tags {
@@ -102,7 +143,11 @@ pub fn encode_task(task: &Task) -> EncodedTask {
     }
 
     for (key, value) in &task.user_defined_attributes {
-        task_data.update(key.clone(), Some(value.clone()), &mut operations);
+        task_data.update(
+            key.clone(),
+            Some(value.clone()),
+            &mut operations,
+        );
     }
 
     EncodedTask {
@@ -146,19 +191,21 @@ fn parse_timestamp(
     value: &str,
 ) -> Result<DateTime<Utc>, CompatibilityError> {
     let property = property.into();
-    let seconds = value
-        .parse::<i64>()
-        .map_err(|_| CompatibilityError::InvalidTimestamp {
+    let seconds = value.parse::<i64>().map_err(|_| {
+        CompatibilityError::InvalidTimestamp {
             property: property.clone(),
             value: value.to_string(),
-        })?;
+        }
+    })?;
 
     Utc.timestamp_opt(seconds, 0)
         .single()
-        .ok_or_else(|| CompatibilityError::InvalidTimestamp {
-            property,
-            value: value.to_string(),
-        })
+        .ok_or_else(
+            || CompatibilityError::InvalidTimestamp {
+                property,
+                value: value.to_string(),
+            },
+        )
 }
 
 fn set_timestamp(
@@ -175,16 +222,24 @@ fn set_timestamp(
 }
 
 fn is_known_property(key: &str) -> bool {
-    matches!(key, PROP_DESCRIPTION | PROP_STATUS | PROP_ENTRY | PROP_WAIT)
-        || key.starts_with(ANNOTATION_PREFIX)
+    matches!(
+        key,
+        PROP_DESCRIPTION
+            | PROP_STATUS
+            | PROP_ENTRY
+            | PROP_MODIFIED
+            | PROP_DUE
+            | PROP_WAIT
+    ) || key.starts_with(ANNOTATION_PREFIX)
         || key.starts_with(TAG_PREFIX)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        decode_task, encode_task, CompatibilityError, ANNOTATION_PREFIX, PROP_DESCRIPTION,
-        PROP_ENTRY, PROP_STATUS, PROP_WAIT, TAG_PREFIX,
+        decode_task, encode_task, CompatibilityError, ANNOTATION_PREFIX,
+        PROP_DESCRIPTION, PROP_DUE, PROP_ENTRY, PROP_MODIFIED, PROP_STATUS,
+        PROP_WAIT, TAG_PREFIX,
     };
     use taskchampion::chrono::{DateTime, TimeZone, Utc};
     use taskchampion::{Operation, Operations, TaskData, Uuid};
@@ -194,12 +249,19 @@ mod tests {
         Utc.timestamp_opt(secs, 0).single().unwrap()
     }
 
-    fn build_task_data(uuid: Uuid, updates: &[(&str, &str)]) -> TaskData {
+    fn build_task_data(
+        uuid: Uuid,
+        updates: &[(&str, &str)],
+    ) -> TaskData {
         let mut operations = Operations::new();
         let mut task_data = TaskData::create(uuid, &mut operations);
 
         for (property, value) in updates {
-            task_data.update(*property, Some((*value).to_string()), &mut operations);
+            task_data.update(
+                *property,
+                Some((*value).to_string()),
+                &mut operations,
+            );
         }
 
         task_data
@@ -210,11 +272,19 @@ mod tests {
         let task_data = build_task_data(
             Uuid::from_u128(10),
             &[
-                (PROP_DESCRIPTION, "Plan compatibility spike"),
+                (
+                    PROP_DESCRIPTION,
+                    "Plan compatibility spike",
+                ),
                 (PROP_STATUS, "recurring"),
                 (PROP_ENTRY, "100"),
+                (PROP_MODIFIED, "150"),
+                (PROP_DUE, "175"),
                 (PROP_WAIT, "200"),
-                (&format!("{ANNOTATION_PREFIX}150"), "first note"),
+                (
+                    &format!("{ANNOTATION_PREFIX}150"),
+                    "first note",
+                ),
                 (&format!("{TAG_PREFIX}home"), ""),
                 ("jira.id", "TW-1"),
             ],
@@ -223,13 +293,21 @@ mod tests {
         let task = decode_task(&task_data).unwrap();
 
         assert_eq!(task.id, Uuid::from_u128(10));
-        assert_eq!(task.description, "Plan compatibility spike");
+        assert_eq!(
+            task.description,
+            "Plan compatibility spike"
+        );
         assert_eq!(task.status, TaskStatus::Recurring);
         assert_eq!(task.entry, Some(timestamp(100)));
+        assert_eq!(task.modified, Some(timestamp(150)));
+        assert_eq!(task.due, Some(timestamp(175)));
         assert_eq!(task.wait, Some(timestamp(200)));
         assert_eq!(
             task.annotations,
-            vec![Annotation::new(timestamp(150), "first note")],
+            vec![Annotation::new(
+                timestamp(150),
+                "first note"
+            )],
         );
         assert!(task.tags.contains("home"));
         assert_eq!(
@@ -243,7 +321,10 @@ mod tests {
         let task_data = build_task_data(
             Uuid::from_u128(11),
             &[
-                (PROP_DESCRIPTION, "Forward compatibility"),
+                (
+                    PROP_DESCRIPTION,
+                    "Forward compatibility",
+                ),
                 (PROP_STATUS, "blocked-elsewhere"),
             ],
         );
@@ -279,9 +360,14 @@ mod tests {
 
     #[test]
     fn encode_generates_taskchampion_task_data_and_operations() {
-        let mut task = Task::new(Uuid::from_u128(13), "Implement conversions");
+        let mut task = Task::new(
+            Uuid::from_u128(13),
+            "Implement conversions",
+        );
         task.status = TaskStatus::Completed;
         task.entry = Some(timestamp(100));
+        task.modified = Some(timestamp(150));
+        task.due = Some(timestamp(175));
         task.wait = Some(timestamp(200));
         task.add_annotation(Annotation::new(timestamp(150), "done"));
         task.add_tag("work");
@@ -289,20 +375,48 @@ mod tests {
 
         let encoded = encode_task(&task);
 
-        assert_eq!(encoded.task_data.get_uuid(), Uuid::from_u128(13));
+        assert_eq!(
+            encoded.task_data.get_uuid(),
+            Uuid::from_u128(13)
+        );
         assert_eq!(
             encoded.task_data.get(PROP_DESCRIPTION),
             Some("Implement conversions"),
         );
-        assert_eq!(encoded.task_data.get(PROP_STATUS), Some("completed"));
-        assert_eq!(encoded.task_data.get(PROP_ENTRY), Some("100"));
-        assert_eq!(encoded.task_data.get(PROP_WAIT), Some("200"));
         assert_eq!(
-            encoded.task_data.get(format!("{ANNOTATION_PREFIX}150")),
+            encoded.task_data.get(PROP_STATUS),
+            Some("completed")
+        );
+        assert_eq!(
+            encoded.task_data.get(PROP_ENTRY),
+            Some("100")
+        );
+        assert_eq!(
+            encoded.task_data.get(PROP_MODIFIED),
+            Some("150")
+        );
+        assert_eq!(
+            encoded.task_data.get(PROP_DUE),
+            Some("175")
+        );
+        assert_eq!(
+            encoded.task_data.get(PROP_WAIT),
+            Some("200")
+        );
+        assert_eq!(
+            encoded
+                .task_data
+                .get(format!("{ANNOTATION_PREFIX}150")),
             Some("done"),
         );
-        assert_eq!(encoded.task_data.get(format!("{TAG_PREFIX}work")), Some(""),);
-        assert_eq!(encoded.task_data.get("jira.id"), Some("TW-13"));
+        assert_eq!(
+            encoded.task_data.get(format!("{TAG_PREFIX}work")),
+            Some(""),
+        );
+        assert_eq!(
+            encoded.task_data.get("jira.id"),
+            Some("TW-13")
+        );
         assert!(matches!(
             encoded.operations.first(),
             Some(Operation::Create {
@@ -316,6 +430,8 @@ mod tests {
         let mut task = Task::new(Uuid::from_u128(14), "Round trip");
         task.status = TaskStatus::Unknown("future-state".to_string());
         task.entry = Some(timestamp(10));
+        task.modified = Some(timestamp(11));
+        task.due = Some(timestamp(12));
         task.wait = Some(timestamp(20));
         task.add_annotation(Annotation::new(timestamp(15), "kept"));
         task.add_tag("home");
