@@ -3,7 +3,8 @@
 ## Planning Assumptions
 
 - Taskwarrior compatibility remains a first-class requirement.
-- The Rust core and backend remain the source of task semantics.
+- The Rust backend remains the source of product-facing operations.
+- The compatibility layer should reuse TaskChampion semantics where possible.
 - Flutter remains the shared client for Android, Linux desktop, and web.
 - This roadmap is ordered to prove architecture and semantics before heavy UI
   or deployment work.
@@ -23,6 +24,8 @@ designing around direct task data files.
 - Rust workspace with `core`, `taskwarrior_compat`, and `server` crates.
 - Initial task domain model boundaries in `core`.
 - Initial compatibility boundary in `taskwarrior_compat`.
+- Initial proof that product-facing backend operations can translate through
+  the compatibility layer without exposing raw TaskChampion objects.
 - Documentation describing the selected architecture and rejected options.
 - Automated tests for the first core and compatibility model assumptions.
 
@@ -34,6 +37,8 @@ designing around direct task data files.
   primary design.
 - The compatibility direction is described without claiming unsupported
   features.
+- The backend boundary demonstrates product-facing operations that do not leak
+  raw TaskChampion storage or replica details.
 
 ### Risks
 
@@ -56,6 +61,8 @@ task semantics in Rust and leaving room for future sync and integration work.
 - API document covering task CRUD, filtering, and status transitions.
 - Internal service boundaries for storage, sync orchestration, and
   compatibility logic.
+- Product-facing backend operations that can translate into
+  TaskChampion-aware mutations through the compatibility layer.
 - Test coverage for request validation and service wiring.
 
 ### Acceptance Criteria
@@ -63,6 +70,7 @@ task semantics in Rust and leaving room for future sync and integration work.
 - The backend exposes a documented, test-covered API skeleton.
 - The API can represent create, update, complete, and query flows at a minimum.
 - API design does not expose Taskwarrior data files directly.
+- API design does not expose raw TaskChampion storage or replica objects.
 - The service boundary leaves room for future two-way sync adapters for
   GitHub, GitLab, Gitea, and similar sources.
 - The service boundary leaves room for future voice and AI-driven command
