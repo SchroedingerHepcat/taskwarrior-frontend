@@ -1,0 +1,12 @@
+[package]
+name = "server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+core = { path = "../core" }
+taskwarrior_compat = { path = "../taskwarrior_compat" }
+
+[lib]
+path = "src/lib.rs"
