@@ -45,6 +45,7 @@ pub struct Task {
     pub entry: Option<DateTime<Utc>>,
     pub modified: Option<DateTime<Utc>>,
     pub due: Option<DateTime<Utc>>,
+    pub end: Option<DateTime<Utc>>,
     pub wait: Option<DateTime<Utc>>,
     pub annotations: Vec<Annotation>,
     pub tags: BTreeSet<String>,
@@ -63,6 +64,7 @@ impl Task {
             entry: None,
             modified: None,
             due: None,
+            end: None,
             wait: None,
             annotations: Vec::new(),
             tags: BTreeSet::new(),
@@ -75,6 +77,20 @@ impl Task {
         now: DateTime<Utc>,
     ) -> bool {
         self.wait.is_some_and(|wait| wait > now)
+    }
+
+    pub fn transition_status(
+        &mut self,
+        status: TaskStatus,
+        changed_at: DateTime<Utc>,
+    ) {
+        self.status = status;
+        self.modified = Some(changed_at);
+        self.end = if self.status.is_terminal() {
+            Some(changed_at)
+        } else {
+            None
+        };
     }
 
     pub fn add_annotation(
@@ -127,6 +143,7 @@ mod tests {
         assert_eq!(task.entry, None);
         assert_eq!(task.modified, None);
         assert_eq!(task.due, None);
+        assert_eq!(task.end, None);
         assert_eq!(task.wait, None);
         assert_eq!(task.annotations, Vec::new());
         assert_eq!(task.tags, BTreeSet::new());
@@ -144,7 +161,42 @@ mod tests {
 
         assert_eq!(task.modified, Some(timestamp(100)));
         assert_eq!(task.due, Some(timestamp(200)));
+        assert_eq!(task.end, None);
         assert_eq!(task.wait, None);
+    }
+
+    #[test]
+    fn completing_task_sets_end_and_modified() {
+        let mut task = Task::new(Uuid::from_u128(6), "Status test");
+
+        task.transition_status(TaskStatus::Completed, timestamp(300));
+
+        assert_eq!(task.status, TaskStatus::Completed);
+        assert_eq!(task.modified, Some(timestamp(300)));
+        assert_eq!(task.end, Some(timestamp(300)));
+    }
+
+    #[test]
+    fn deleting_task_sets_end_and_modified() {
+        let mut task = Task::new(Uuid::from_u128(7), "Delete test");
+
+        task.transition_status(TaskStatus::Deleted, timestamp(400));
+
+        assert_eq!(task.status, TaskStatus::Deleted);
+        assert_eq!(task.modified, Some(timestamp(400)));
+        assert_eq!(task.end, Some(timestamp(400)));
+    }
+
+    #[test]
+    fn non_terminal_status_clears_end_and_updates_modified() {
+        let mut task = Task::new(Uuid::from_u128(8), "Reopen test");
+        task.transition_status(TaskStatus::Completed, timestamp(500));
+
+        task.transition_status(TaskStatus::Pending, timestamp(600));
+
+        assert_eq!(task.status, TaskStatus::Pending);
+        assert_eq!(task.modified, Some(timestamp(600)));
+        assert_eq!(task.end, None);
     }
 
     #[test]

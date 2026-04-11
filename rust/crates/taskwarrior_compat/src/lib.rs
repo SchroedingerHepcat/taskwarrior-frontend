@@ -15,6 +15,7 @@ const PROP_STATUS: &str = "status";
 const PROP_ENTRY: &str = "entry";
 const PROP_MODIFIED: &str = "modified";
 const PROP_DUE: &str = "due";
+const PROP_END: &str = "end";
 const PROP_WAIT: &str = "wait";
 const ANNOTATION_PREFIX: &str = "annotation_";
 const TAG_PREFIX: &str = "tag_";
@@ -59,6 +60,7 @@ pub fn decode_task(task_data: &TaskData) -> Result<Task, CompatibilityError> {
     task.entry = decode_timestamp(task_data, PROP_ENTRY)?;
     task.modified = decode_timestamp(task_data, PROP_MODIFIED)?;
     task.due = decode_timestamp(task_data, PROP_DUE)?;
+    task.end = decode_timestamp(task_data, PROP_END)?;
     task.wait = decode_timestamp(task_data, PROP_WAIT)?;
 
     for (key, value) in task_data.iter() {
@@ -113,6 +115,12 @@ pub fn encode_task(task: &Task) -> EncodedTask {
         &mut task_data,
         PROP_DUE,
         task.due,
+        &mut operations,
+    );
+    set_timestamp(
+        &mut task_data,
+        PROP_END,
+        task.end,
         &mut operations,
     );
     set_timestamp(
@@ -229,6 +237,7 @@ fn is_known_property(key: &str) -> bool {
             | PROP_ENTRY
             | PROP_MODIFIED
             | PROP_DUE
+            | PROP_END
             | PROP_WAIT
     ) || key.starts_with(ANNOTATION_PREFIX)
         || key.starts_with(TAG_PREFIX)
@@ -238,8 +247,8 @@ fn is_known_property(key: &str) -> bool {
 mod tests {
     use super::{
         decode_task, encode_task, CompatibilityError, ANNOTATION_PREFIX,
-        PROP_DESCRIPTION, PROP_DUE, PROP_ENTRY, PROP_MODIFIED, PROP_STATUS,
-        PROP_WAIT, TAG_PREFIX,
+        PROP_DESCRIPTION, PROP_DUE, PROP_END, PROP_ENTRY, PROP_MODIFIED,
+        PROP_STATUS, PROP_WAIT, TAG_PREFIX,
     };
     use taskchampion::chrono::{DateTime, TimeZone, Utc};
     use taskchampion::{Operation, Operations, TaskData, Uuid};
@@ -280,6 +289,7 @@ mod tests {
                 (PROP_ENTRY, "100"),
                 (PROP_MODIFIED, "150"),
                 (PROP_DUE, "175"),
+                (PROP_END, "190"),
                 (PROP_WAIT, "200"),
                 (
                     &format!("{ANNOTATION_PREFIX}150"),
@@ -301,6 +311,7 @@ mod tests {
         assert_eq!(task.entry, Some(timestamp(100)));
         assert_eq!(task.modified, Some(timestamp(150)));
         assert_eq!(task.due, Some(timestamp(175)));
+        assert_eq!(task.end, Some(timestamp(190)));
         assert_eq!(task.wait, Some(timestamp(200)));
         assert_eq!(
             task.annotations,
@@ -368,6 +379,7 @@ mod tests {
         task.entry = Some(timestamp(100));
         task.modified = Some(timestamp(150));
         task.due = Some(timestamp(175));
+        task.end = Some(timestamp(190));
         task.wait = Some(timestamp(200));
         task.add_annotation(Annotation::new(timestamp(150), "done"));
         task.add_tag("work");
@@ -398,6 +410,10 @@ mod tests {
         assert_eq!(
             encoded.task_data.get(PROP_DUE),
             Some("175")
+        );
+        assert_eq!(
+            encoded.task_data.get(PROP_END),
+            Some("190")
         );
         assert_eq!(
             encoded.task_data.get(PROP_WAIT),
@@ -432,6 +448,7 @@ mod tests {
         task.entry = Some(timestamp(10));
         task.modified = Some(timestamp(11));
         task.due = Some(timestamp(12));
+        task.end = Some(timestamp(13));
         task.wait = Some(timestamp(20));
         task.add_annotation(Annotation::new(timestamp(15), "kept"));
         task.add_tag("home");
