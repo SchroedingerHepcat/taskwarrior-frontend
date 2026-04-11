@@ -428,6 +428,7 @@ dependencies = [
 name = "server"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "taskwarrior_compat",
  "taskwarrior_core",
  "uuid",
