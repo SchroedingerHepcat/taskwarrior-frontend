@@ -251,6 +251,12 @@ code and tests in this repository:
 - basic core status transitions for `end` and `modified`
 - basic dependency mapping between product-facing tasks and TaskChampion data
 - basic product-facing query filtering by status, tag, due, and waiting state
+- a transport-neutral backend API skeleton for create, update, transition,
+  dependency, and query operations
+- request validation at the backend boundary for descriptions, status input,
+  dependency shape, and query shape
+- internal server boundaries for repository storage, compatibility write
+  preparation, and sync coordination
 
 The following areas are still open and should not be treated as proven yet:
 
@@ -258,6 +264,8 @@ The following areas are still open and should not be treated as proven yet:
 - scheduled and waiting lifecycle rules beyond timestamp mapping and query
   filtering
 - dependency semantics beyond basic `dep_*` mapping and storage shape
+- transport-specific API protocol design
+- durable persistence and real multi-client sync behavior
 - task completion and deletion side effects beyond basic `end` timestamping
 - storage, replica orchestration, and sync behavior
 

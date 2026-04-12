@@ -1,10 +1,26 @@
-//! Server-facing API boundary placeholders for the spike.
+//! Transport-neutral backend API scaffold.
 
+mod error;
 mod operations;
 mod requests;
+mod service;
+mod storage;
+mod sync;
 
+pub use error::{ServiceError, ValidationError};
 pub use operations::{
-    add_task_dependency, compat_round_trip, create_task, healthcheck,
-    query_tasks, sample_task, transition_task,
+    api_spec, handle_add_dependency, handle_create_task, handle_health,
+    handle_query_tasks, handle_transition_task, handle_update_task,
+    healthcheck, ApiEndpoint, ApiMethod, HealthResponse, TaskListResponse,
+    TaskResponse,
 };
-pub use requests::{CreateTaskRequest, TaskQuery, TransitionTaskRequest};
+pub use requests::{
+    AddDependencyRequest, CreateTaskRequest, TaskQuery, TransitionTaskRequest,
+    UpdateTaskRequest,
+};
+pub use service::TaskService;
+pub use storage::{InMemoryTaskRepository, TaskRepository};
+pub use sync::{
+    CompatibilityGateway, InMemorySyncCoordinator, PreparedTaskWrite,
+    SyncCoordinator, TaskwarriorCompatibilityGateway,
+};

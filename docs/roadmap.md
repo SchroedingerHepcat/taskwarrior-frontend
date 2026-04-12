@@ -52,6 +52,8 @@ designing around direct task data files.
 
 ## Milestone 2: Backend API Scaffold
 
+Status: complete
+
 ### Goal
 
 Establish a backend service boundary that can support all clients while keeping
@@ -85,17 +87,16 @@ task semantics in Rust and leaving room for future sync and integration work.
   write paths exist.
 - Integration extensibility may be asserted in structure but not yet validated.
 
-### Remaining Proof Gaps
+### Carryover To Later Milestones
 
-- Transport remains open. Milestone 1 proved product-facing operations, not an
-  HTTP, gRPC, or other wire protocol contract.
-- Sync orchestration remains open. The backend boundary is proven at an
-  in-process service level, not for real multi-client synchronization.
+- Transport remains open. Milestone 2 proves a transport-neutral API skeleton,
+  not a specific HTTP, gRPC, or other wire protocol contract.
+- Sync orchestration remains open beyond the current internal coordinator seam.
 - Authentication and authorization remain open.
 - Offline write reconciliation remains open.
 - Pagination, list envelopes, and a durable error model remain open.
-- Advanced filtering remains open beyond the first proven query shape of
-  status, tag, due cutoff, and waiting-state handling.
+- Advanced filtering remains open beyond the current query shape of status,
+  tag, due cutoff, and waiting-state handling.
 - It is still not fully proven which mutation paths should call more directly
   into TaskChampion semantics and which should remain product-layer logic.
 
