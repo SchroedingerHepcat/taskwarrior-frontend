@@ -1,0 +1,10 @@
+pub(crate) const PROP_DESCRIPTION: &str = "description";
+pub(crate) const PROP_STATUS: &str = "status";
+pub(crate) const PROP_ENTRY: &str = "entry";
+pub(crate) const PROP_MODIFIED: &str = "modified";
+pub(crate) const PROP_DUE: &str = "due";
+pub(crate) const PROP_END: &str = "end";
+pub(crate) const PROP_WAIT: &str = "wait";
+pub(crate) const ANNOTATION_PREFIX: &str = "annotation_";
+pub(crate) const TAG_PREFIX: &str = "tag_";
+pub(crate) const DEP_PREFIX: &str = "dep_";
