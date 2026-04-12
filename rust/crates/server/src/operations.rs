@@ -1,4 +1,4 @@
-use crate::requests::{CreateTaskRequest, TransitionTaskRequest};
+use crate::requests::{CreateTaskRequest, TaskQuery, TransitionTaskRequest};
 use taskwarrior_compat::{decode_task, encode_task, CompatibilityError};
 use taskwarrior_core::Task;
 use uuid::Uuid;
@@ -25,6 +25,33 @@ pub fn add_task_dependency(
     task.add_dependency(dependency);
 }
 
+pub fn query_tasks(
+    tasks: &[Task],
+    query: &TaskQuery,
+) -> Vec<Task> {
+    tasks
+        .iter()
+        .filter(|task| {
+            query.statuses.is_empty() || query.statuses.contains(&task.status)
+        })
+        .filter(|task| {
+            query
+                .required_tag
+                .as_ref()
+                .is_none_or(|tag| task.tags.contains(tag))
+        })
+        .filter(|task| {
+            query.due_before.is_none_or(|due_before| {
+                task.due.is_some_and(|due| due <= due_before)
+            })
+        })
+        .filter(|task| {
+            query.include_waiting || !task.is_waiting_at(query.reference_time)
+        })
+        .cloned()
+        .collect()
+}
+
 pub fn compat_round_trip(task: &Task) -> Result<Task, CompatibilityError> {
     let encoded = encode_task(task);
     decode_task(&encoded.task_data)
@@ -41,11 +68,13 @@ pub fn sample_task() -> Task {
 mod tests {
     use super::{
         add_task_dependency, compat_round_trip, create_task, healthcheck,
-        sample_task, transition_task,
+        query_tasks, sample_task, transition_task,
     };
-    use crate::requests::{CreateTaskRequest, TransitionTaskRequest};
+    use crate::requests::{
+        CreateTaskRequest, TaskQuery, TransitionTaskRequest,
+    };
     use chrono::{TimeZone, Utc};
-    use taskwarrior_core::TaskStatus;
+    use taskwarrior_core::{Task, TaskStatus};
     use uuid::Uuid;
 
     fn timestamp(secs: i64) -> chrono::DateTime<Utc> {
@@ -130,5 +159,39 @@ mod tests {
         let decoded = compat_round_trip(&task).unwrap();
 
         assert!(decoded.dependencies.contains(&dependency));
+    }
+
+    #[test]
+    fn product_facing_query_filters_by_status_tag_and_scheduling_shape() {
+        let mut matching = Task::new(Uuid::from_u128(7), "matching");
+        matching.add_tag("home");
+        matching.due = Some(timestamp(100));
+
+        let mut filtered_by_wait = Task::new(Uuid::from_u128(8), "waiting");
+        filtered_by_wait.add_tag("home");
+        filtered_by_wait.due = Some(timestamp(90));
+        filtered_by_wait.wait = Some(timestamp(300));
+
+        let mut filtered_by_status = Task::new(Uuid::from_u128(9), "done");
+        filtered_by_status.add_tag("home");
+        filtered_by_status
+            .transition_status(TaskStatus::Completed, timestamp(50));
+
+        let query = TaskQuery {
+            statuses: vec![TaskStatus::Pending],
+            required_tag: Some("home".to_string()),
+            due_before: Some(timestamp(150)),
+            include_waiting: false,
+            reference_time: timestamp(200),
+        };
+
+        let tasks = vec![
+            matching.clone(),
+            filtered_by_wait,
+            filtered_by_status,
+        ];
+        let result = query_tasks(&tasks, &query);
+
+        assert_eq!(result, vec![matching]);
     }
 }

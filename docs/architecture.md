@@ -250,11 +250,13 @@ code and tests in this repository:
 - user-defined attributes outside the known property set
 - basic core status transitions for `end` and `modified`
 - basic dependency mapping between product-facing tasks and TaskChampion data
+- basic product-facing query filtering by status, tag, due, and waiting state
 
 The following areas are still open and should not be treated as proven yet:
 
 - recurring task semantics beyond preserving the `recurring` status value
-- scheduled and waiting lifecycle rules beyond basic timestamp mapping
+- scheduled and waiting lifecycle rules beyond timestamp mapping and query
+  filtering
 - dependency semantics beyond basic `dep_*` mapping and storage shape
 - task completion and deletion side effects beyond basic `end` timestamping
 - storage, replica orchestration, and sync behavior
