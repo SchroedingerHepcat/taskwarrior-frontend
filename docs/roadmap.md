@@ -89,6 +89,8 @@ task semantics in Rust and leaving room for future sync and integration work.
 
 ## Milestone 3: Flutter Shell
 
+Status: complete
+
 ### Goal
 
 Create a usable cross-platform client shell that can run on Android, Linux
@@ -99,6 +101,11 @@ desktop, and web against the backend scaffold.
 - Flutter application shell with routing, app state boundaries, and backend
   client integration points.
 - Initial layout system for mobile, desktop, and web.
+- Layout should support both landscape and portrait views on the web and desktop
+  versions
+- Good layout should be used for different sized screens (i.e. the desktop/web
+  versions should not just be a scaled up version of the phone, but rather
+  should use the extra space on a larger screen wisely)
 - Placeholder screens for dashboard, task list, board view, and task detail.
 - Design direction for a contemporary UI without locking into premature visual
   polish.
@@ -119,14 +126,6 @@ desktop, and web against the backend scaffold.
   treated as mobile-only screens.
 - A visual shell can hide missing domain capability if not tied to real data.
 - Drag-and-drop interaction can create platform-specific behavior differences.
-
-### Notes For This Milestone
-
-- Milestone 2 proved a transport-neutral API skeleton, not a final wire
-  protocol. The Flutter shell should integrate through a client boundary that
-  can tolerate later HTTP or gRPC selection.
-- Pagination and list envelope shape are still open and may affect the first
-  list and dashboard integration points.
 
 ## Milestone 4: End-To-End Create, Update, And Complete Flows
 
@@ -163,6 +162,11 @@ creation, editing, completion, and querying.
 
 ### Notes For This Milestone
 
+- Milestone 3 proved a transport-tolerant client boundary, not a final
+  backend wire protocol. This milestone should be the first one to wire the
+  shell to a real backend path in local development.
+- Pagination and list envelope shape remain open and may affect the first real
+  list and dashboard flows.
 - The current backend update shape is intentionally narrow and will likely need
   expansion once task detail editing includes more Taskwarrior-aligned fields.
 - Advanced filtering remains open beyond status, tag, due cutoff, and
@@ -228,6 +232,9 @@ board views, and advanced filtering.
 
 ### Notes For This Milestone
 
+- Platform-specific interaction polish is still open beyond the current shell.
+- The current board surface proves drag-and-drop structure, not final desktop,
+  web, or Android interaction tuning.
 - This milestone should absorb the remaining advanced filtering work from
   Milestone 2 and turn it into a stable product-facing query model.
 - This is also the first milestone where the project should prove more

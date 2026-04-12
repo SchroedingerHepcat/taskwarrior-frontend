@@ -1,5 +1,5 @@
 name: flutter_app
-description: Minimal Flutter shell for the compatibility spike.
+description: Responsive Flutter shell for the project-management frontend.
 publish_to: none
 
 version: 0.1.0+1
@@ -13,6 +13,8 @@ dependencies:
     sdk: flutter
 
 dev_dependencies:
+  integration_test:
+    sdk: flutter
   flutter_test:
     sdk: flutter
 

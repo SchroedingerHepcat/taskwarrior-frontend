@@ -257,6 +257,8 @@ code and tests in this repository:
   dependency shape, and query shape
 - internal server boundaries for repository storage, compatibility write
   preparation, and sync coordination
+- a Flutter shell boundary that routes user navigation and screen state through
+  product-facing client operations rather than Taskwarrior storage concepts
 
 The following areas are still open and should not be treated as proven yet:
 
@@ -266,6 +268,8 @@ The following areas are still open and should not be treated as proven yet:
 - dependency semantics beyond basic `dep_*` mapping and storage shape
 - transport-specific API protocol design
 - durable persistence and real multi-client sync behavior
+- full end-to-end backend connectivity from the Flutter shell over a final wire
+  protocol
 - task completion and deletion side effects beyond basic `end` timestamping
 - storage, replica orchestration, and sync behavior
 

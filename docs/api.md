@@ -8,6 +8,10 @@ backend boundary, request validation, and service-layer seams so the server and
 Flutter app can evolve toward the same shape without leaking TaskChampion
 internals.
 
+The Flutter app now consumes that boundary through a transport-tolerant client
+adapter. Local development currently uses a Dart-side adapter that mirrors the
+backend API skeleton without choosing a final wire protocol.
+
 ## Current API Skeleton
 
 The current endpoint scaffold covers:
@@ -62,6 +66,9 @@ Rust service boundaries.
 
 - The Flutter client should depend on product-facing backend operations rather
   than direct Taskwarrior or TaskChampion data access.
+- The Flutter client should keep transport behind a client boundary so the app
+  can evolve from local development adapters to HTTP or another protocol later
+  without rewriting screen logic.
 - Taskwarrior compatibility behavior should remain behind Rust boundaries, not
   in the client.
 - The backend should not expose raw TaskChampion storage or replica objects.
