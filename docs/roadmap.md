@@ -87,19 +87,6 @@ task semantics in Rust and leaving room for future sync and integration work.
   write paths exist.
 - Integration extensibility may be asserted in structure but not yet validated.
 
-### Carryover To Later Milestones
-
-- Transport remains open. Milestone 2 proves a transport-neutral API skeleton,
-  not a specific HTTP, gRPC, or other wire protocol contract.
-- Sync orchestration remains open beyond the current internal coordinator seam.
-- Authentication and authorization remain open.
-- Offline write reconciliation remains open.
-- Pagination, list envelopes, and a durable error model remain open.
-- Advanced filtering remains open beyond the current query shape of status,
-  tag, due cutoff, and waiting-state handling.
-- It is still not fully proven which mutation paths should call more directly
-  into TaskChampion semantics and which should remain product-layer logic.
-
 ## Milestone 3: Flutter Shell
 
 ### Goal
@@ -133,6 +120,14 @@ desktop, and web against the backend scaffold.
 - A visual shell can hide missing domain capability if not tied to real data.
 - Drag-and-drop interaction can create platform-specific behavior differences.
 
+### Notes For This Milestone
+
+- Milestone 2 proved a transport-neutral API skeleton, not a final wire
+  protocol. The Flutter shell should integrate through a client boundary that
+  can tolerate later HTTP or gRPC selection.
+- Pagination and list envelope shape are still open and may affect the first
+  list and dashboard integration points.
+
 ## Milestone 4: End-To-End Create, Update, And Complete Flows
 
 ### Goal
@@ -165,6 +160,15 @@ creation, editing, completion, and querying.
 - Query and filter semantics may diverge between backend and UI if not kept in
   one place.
 - Dashboard configuration can expand scope quickly if not kept narrow.
+
+### Notes For This Milestone
+
+- The current backend update shape is intentionally narrow and will likely need
+  expansion once task detail editing includes more Taskwarrior-aligned fields.
+- Advanced filtering remains open beyond status, tag, due cutoff, and
+  waiting-state handling.
+- It is still not fully proven which mutation paths should call more directly
+  into TaskChampion semantics and which should remain product-layer logic.
 
 ## Milestone 5: Taskwarrior Semantics, GTD, And Advanced Views
 
@@ -222,6 +226,13 @@ board views, and advanced filtering.
   drop must still be shown to produce valid task updates without inventing
   client-side semantics.
 
+### Notes For This Milestone
+
+- This milestone should absorb the remaining advanced filtering work from
+  Milestone 2 and turn it into a stable product-facing query model.
+- This is also the first milestone where the project should prove more
+  directly which backend mutations should defer to TaskChampion semantic logic.
+
 ## Milestone 6: Self-Hosted Deployment
 
 ### Goal
@@ -255,6 +266,12 @@ deployment and basic operational controls.
 - Web and backend deployment may be straightforward while desktop and Android
   distribution still lag behind.
 
+### Notes For This Milestone
+
+- Authentication and authorization are still open carryover from Milestone 2.
+- Durable storage, migration, and deployment-safe configuration are still open
+  carryover from the current in-memory service scaffold.
+
 ## Milestone 7: Sync, Error, And Conflict UX
 
 ### Goal
@@ -285,6 +302,13 @@ clients, especially once multiple devices are in use.
 - Offline support may be significantly different across Android, desktop, and
   web.
 - External-source synchronization will add complexity beyond first-party sync.
+
+### Notes For This Milestone
+
+- Sync orchestration remains open beyond the current internal coordinator seam.
+- Offline write reconciliation remains open.
+- A durable error model from the API boundary will likely need to solidify here
+  if it has not already been finalized earlier.
 
 ## Milestone 8: Polish For Android, Web, And Desktop
 
