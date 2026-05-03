@@ -12,7 +12,8 @@ This repository currently contains the initial scaffold for:
 The Rust server currently includes a small HTTP API with validated
 product-facing operations for health, create, get, update, status transition,
 and query filtering. It does not yet implement durable storage, authentication,
-or sync orchestration.
+or sync orchestration. The intended durable task storage path is through
+Taskwarrior 3 and TaskChampion, not a separate custom task database.
 
 The Flutter app currently includes responsive dashboard, list, board, and
 detail screens backed by that HTTP API. It now proves end-to-end create,

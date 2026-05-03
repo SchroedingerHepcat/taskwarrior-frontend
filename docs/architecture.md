@@ -60,17 +60,20 @@ that storage.
 
 ### Description
 
-A Rust core owns task semantics. A compatibility layer is explicitly aware of
-Taskwarrior 3 and TaskChampion concepts. A Rust backend exposes an API used by
-Android, Linux desktop, and web clients. Clients do not manipulate Taskwarrior
-data files directly.
+A Rust core owns product-facing task structures and API-facing semantics. A
+compatibility layer is explicitly aware of Taskwarrior 3 and TaskChampion
+concepts. A Rust backend exposes an API used by Android, Linux desktop, and
+web clients, and it performs task CRUD through Taskwarrior or TaskChampion.
+Clients do not manipulate Taskwarrior data files directly.
 
 ### Strengths
 
 - Matches the repository rules directly.
 - Keeps Taskwarrior-compatible semantics in one place.
 - Gives all clients the same behavior through a backend-mediated API.
-- Fits self-hosting well because the backend can own storage, sync, and policy.
+- Fits self-hosting well because the backend can own storage access, sync
+  orchestration, and policy while Taskwarrior or TaskChampion remain the task
+  storage authority.
 - Makes Android and web support realistic because clients can stay thin.
 - Preserves a path to strong compatibility without forcing the UI layer to
   understand Taskwarrior internals.
@@ -90,6 +93,9 @@ data files directly.
   recurring task or scheduling semantics.
 - Medium risk that compatibility translation becomes complex if the core model
   diverges from Taskwarrior concepts too quickly.
+- Medium risk that a generic storage abstraction could accidentally recreate a
+  custom task database instead of routing CRUD through Taskwarrior or
+  TaskChampion.
 
 ### Fit For Project Goals
 
@@ -156,8 +162,8 @@ making Taskwarrior support secondary.
 Option 2 is the best fit for each target:
 
 - Self-hosting
-  A backend can own storage, sync orchestration, and operational boundaries in
-  a way that is understandable to one administrator.
+  A backend can own API, sync orchestration, and operational boundaries while
+  storing tasks through Taskwarrior 3 and TaskChampion directly.
 - Android client
   Android should not depend on direct file-level compatibility or local
   synchronization tricks. An API boundary is the practical approach.
@@ -182,17 +188,26 @@ instead of casually reimplementing that logic in this repository.
 That decision does not mean raw TaskChampion objects become the application
 model across all layers.
 
+Taskwarrior 3 and TaskChampion are also the intended durable task storage and
+mutation authority. The server should interface with Taskwarrior or
+TaskChampion for all task CRUD events rather than persisting an independent
+custom task store. Product-facing server operations should translate into
+Taskwarrior-compatible mutations, then read back through the same compatibility
+boundary.
+
 The intended layer responsibilities are:
 
 - `taskwarrior_core`
   Owns product-facing task structures and service-level operations, while
   remaining intentionally aligned with Taskwarrior-compatible semantics.
 - `taskwarrior_compat`
-  Owns translation to and from TaskChampion-compatible data and should reuse
-  TaskChampion mutation and semantic logic where possible.
+  Owns translation to and from TaskChampion-compatible data, and owns the
+  integration path used by the server to perform Taskwarrior-compatible CRUD.
+  It should reuse TaskChampion mutation and semantic logic where possible.
 - `server`
-  Owns backend-facing API operations and should expose GUI-friendly operations,
-  not raw TaskChampion storage or replica objects.
+  Owns backend-facing API operations and should expose GUI-friendly operations.
+  It should route task CRUD through Taskwarrior or TaskChampion via the
+  compatibility layer, not expose raw TaskChampion storage or replica objects.
 - `flutter_app`
   Owns presentation and user interaction only. It must not implement
   Taskwarrior semantics itself.
@@ -201,12 +216,17 @@ The intended layer responsibilities are:
 
 - Frontend actions should translate into backend operations, not into direct
   client-side Taskwarrior logic.
-- Backend operations should translate into TaskChampion-aware mutations through
-  the compatibility layer where possible.
+- Backend task CRUD operations should translate into Taskwarrior or
+  TaskChampion mutations through the compatibility layer.
 - Reuse of upstream TaskChampion logic is preferred over duplicating existing
   semantic behavior in this repository.
+- The backend should not maintain a separate authoritative task database with
+  Taskwarrior treated as a secondary import or export target.
 - Raw TaskChampion storage and replica objects should not leak across the API
   boundary.
+- Direct synchronization of Taskwarrior data files remains a rejected
+  architecture. TaskChampion-backed storage is used through Rust APIs and
+  controlled backend operations, not through client-visible file sharing.
 - The project still needs a product-facing task model and API shape, because
   dashboards, boards, filters, and future integrations should not be forced to
   couple directly to low-level TaskChampion object shapes.
@@ -229,8 +249,9 @@ evidence:
    The server API must be validated against real client needs so that it does
    not expose storage details or omit necessary semantic operations.
 5. Storage and sync proof
-   The backend needs a concrete persistence and synchronization strategy that
-   does not depend on external file sync and does not undermine compatibility.
+   The backend must prove concrete Taskwarrior or TaskChampion-backed storage
+   and synchronization through Rust APIs, without external file sync or an
+   independent custom task store.
 
 ## Current TaskChampion Proof Status
 
@@ -272,6 +293,7 @@ The following areas are still open and should not be treated as proven yet:
   filtering
 - dependency semantics beyond basic `dep_*` mapping and storage shape
 - durable persistence and real multi-client sync behavior
+- server CRUD backed directly by Taskwarrior or TaskChampion storage
 - whether additional protocols are needed beyond the current HTTP boundary
 - task completion and deletion side effects beyond basic `end` timestamping
 - storage, replica orchestration, and sync behavior

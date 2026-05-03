@@ -10,6 +10,11 @@ This is still a narrow product-facing boundary. It proves end-to-end behavior
 without exposing TaskChampion storage details or claiming that transport,
 authentication, pagination, or sync behavior are settled.
 
+The intended storage direction is Taskwarrior 3 and TaskChampion directly. The
+HTTP API should remain product-facing, but server CRUD handlers should
+eventually perform task mutations through Taskwarrior or TaskChampion rather
+than through an independent authoritative task database.
+
 ## Current HTTP API
 
 The current HTTP surface covers:
@@ -65,6 +70,8 @@ The server crate now separates:
 - repository storage behind a `TaskRepository` trait
 - compatibility write preparation behind a `CompatibilityGateway` trait
 - sync orchestration behind a `SyncCoordinator` trait
+- future Taskwarrior or TaskChampion-backed storage behind Rust service
+  boundaries
 
 This is sufficient for Milestone 4 because it proves the backend can expose a
 real wire-level path while keeping compatibility and sync concerns behind Rust
@@ -79,6 +86,8 @@ service boundaries.
 - Taskwarrior compatibility behavior should remain behind Rust boundaries, not
   in the client.
 - The backend should not expose raw TaskChampion storage or replica objects.
+- The backend should route task CRUD through Taskwarrior or TaskChampion as the
+  storage and mutation authority.
 - The compatibility layer may reuse TaskChampion semantics internally where
   that behavior is already authoritative.
 - External systems such as issue trackers, voice interfaces, and AI tools
@@ -88,6 +97,7 @@ service boundaries.
 ## Open questions
 
 - sync model
+- Taskwarrior or TaskChampion-backed storage implementation
 - authentication model
 - offline write reconciliation
 - pagination and list result shape

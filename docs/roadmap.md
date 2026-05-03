@@ -5,6 +5,10 @@
 - Taskwarrior compatibility remains a first-class requirement.
 - The Rust backend remains the source of product-facing operations.
 - The compatibility layer should reuse TaskChampion semantics where possible.
+- Taskwarrior 3 and TaskChampion are the intended durable task storage and
+  mutation authority.
+- Server CRUD operations should call into Taskwarrior or TaskChampion through
+  Rust boundaries rather than write to an independent task database.
 - Flutter remains the shared client for Android, Linux desktop, and web.
 - This roadmap is ordered to prove architecture and semantics before heavy UI
   or deployment work.
@@ -67,6 +71,8 @@ task semantics in Rust and leaving room for future sync and integration work.
   compatibility logic.
 - Product-facing backend operations that can translate into
   TaskChampion-aware mutations through the compatibility layer.
+- A storage direction that treats Taskwarrior or TaskChampion as the
+  authoritative task store for CRUD events.
 - Test coverage for request validation and service wiring.
 
 ### Acceptance Criteria
@@ -75,6 +81,8 @@ task semantics in Rust and leaving room for future sync and integration work.
 - The API can represent create, update, complete, and query flows at a minimum.
 - API design does not expose Taskwarrior data files directly.
 - API design does not expose raw TaskChampion storage or replica objects.
+- Task CRUD is designed to route through Taskwarrior or TaskChampion, not a
+  separate authoritative task database.
 - The service boundary leaves room for future two-way sync adapters for
   GitHub, GitLab, Gitea, and similar sources.
 - The service boundary leaves room for future voice and AI-driven command
@@ -85,6 +93,8 @@ task semantics in Rust and leaving room for future sync and integration work.
 - The API may freeze too early before recurring and GTD semantics are proven.
 - Storage abstractions may become speculative if they are designed before real
   write paths exist.
+- A generic repository abstraction may hide the required TaskChampion-backed
+  CRUD path if it remains the only storage proof.
 - Integration extensibility may be asserted in structure but not yet validated.
 
 ## Milestone 3: Flutter Shell
@@ -179,6 +189,9 @@ creation, editing, completion, and querying.
 - The current HTTP surface does not yet expose every internal service
   operation, including dependency mutation, because this milestone only needed
   the first end-to-end CRUD and query path.
+- The current implementation still uses in-memory storage for the first HTTP
+  path. Future storage work should replace that with Taskwarrior or
+  TaskChampion-backed CRUD rather than a custom authoritative database.
 
 ## Milestone 5: Taskwarrior Semantics, GTD, And Advanced Views
 
@@ -245,6 +258,9 @@ board views, and advanced filtering.
   Milestone 2 and turn it into a stable product-facing query model.
 - This is also the first milestone where the project should prove more
   directly which backend mutations should defer to TaskChampion semantic logic.
+- This milestone should start replacing product-layer CRUD assumptions with
+  Taskwarrior or TaskChampion-backed mutations for semantic cases such as
+  recurrence, scheduling, completion, and dependency behavior.
 
 ## Milestone 6: Self-Hosted Deployment
 
@@ -258,6 +274,7 @@ deployment and basic operational controls.
 - Production-oriented backend and frontend deployment configuration.
 - Containerized local and self-hosted deployment path.
 - Configuration for storage, networking, and client base URLs.
+- Taskwarrior or TaskChampion-backed storage configuration for the backend.
 - Deployment documentation for a single-node self-hosted setup.
 - Basic operational checks, logs, and health endpoints.
 
@@ -268,6 +285,8 @@ deployment and basic operational controls.
 - Health checks and logs are sufficient to debug startup and connectivity
   failures.
 - The deployment path does not rely on external file synchronization.
+- The deployment path uses Taskwarrior or TaskChampion as the task storage
+  authority through backend-controlled Rust APIs.
 - CI validates the deployment artifacts at least to the level of build and
   configuration sanity.
 
@@ -282,8 +301,9 @@ deployment and basic operational controls.
 ### Notes For This Milestone
 
 - Authentication and authorization are still open carryover from Milestone 2.
-- Durable storage, migration, and deployment-safe configuration are still open
-  carryover from the current in-memory service scaffold.
+- Durable Taskwarrior or TaskChampion-backed storage, migration, backup, and
+  deployment-safe configuration are still open carryover from the current
+  in-memory service scaffold.
 
 ## Milestone 7: Sync, Error, And Conflict UX
 
