@@ -1,7 +1,8 @@
 use crate::error::CompatibilityError;
 use crate::properties::{
     ANNOTATION_PREFIX, DEP_PREFIX, PROP_DESCRIPTION, PROP_DUE, PROP_END,
-    PROP_ENTRY, PROP_MODIFIED, PROP_STATUS, PROP_WAIT, TAG_PREFIX,
+    PROP_ENTRY, PROP_MODIFIED, PROP_PROJECT, PROP_STATUS, PROP_WAIT,
+    TAG_PREFIX,
 };
 use taskchampion::chrono::{DateTime, TimeZone, Utc};
 use taskchampion::{Operations, TaskData};
@@ -20,6 +21,7 @@ pub fn decode_task(task_data: &TaskData) -> Result<Task, CompatibilityError> {
             .get(PROP_DESCRIPTION)
             .unwrap_or_default(),
     );
+    task.project = task_data.get(PROP_PROJECT).map(ToOwned::to_owned);
     task.status = decode_status(task_data.get(PROP_STATUS));
     task.entry = decode_timestamp(task_data, PROP_ENTRY)?;
     task.modified = decode_timestamp(task_data, PROP_MODIFIED)?;
@@ -65,6 +67,11 @@ pub fn encode_task(task: &Task) -> EncodedTask {
     task_data.update(
         PROP_DESCRIPTION,
         Some(task.description.clone()),
+        &mut operations,
+    );
+    task_data.update(
+        PROP_PROJECT,
+        task.project.clone(),
         &mut operations,
     );
     task_data.update(
@@ -214,6 +221,7 @@ fn is_known_property(key: &str) -> bool {
     matches!(
         key,
         PROP_DESCRIPTION
+            | PROP_PROJECT
             | PROP_STATUS
             | PROP_ENTRY
             | PROP_MODIFIED
@@ -231,7 +239,8 @@ mod tests {
     use crate::error::CompatibilityError;
     use crate::properties::{
         ANNOTATION_PREFIX, DEP_PREFIX, PROP_DESCRIPTION, PROP_DUE, PROP_END,
-        PROP_ENTRY, PROP_MODIFIED, PROP_STATUS, PROP_WAIT, TAG_PREFIX,
+        PROP_ENTRY, PROP_MODIFIED, PROP_PROJECT, PROP_STATUS, PROP_WAIT,
+        TAG_PREFIX,
     };
     use taskchampion::chrono::{DateTime, TimeZone, Utc};
     use taskchampion::{Operation, Operations, TaskData, Uuid};
@@ -268,6 +277,7 @@ mod tests {
                     PROP_DESCRIPTION,
                     "Plan compatibility spike",
                 ),
+                (PROP_PROJECT, "frontend"),
                 (PROP_STATUS, "recurring"),
                 (PROP_ENTRY, "100"),
                 (PROP_MODIFIED, "150"),
@@ -293,6 +303,10 @@ mod tests {
         assert_eq!(
             task.description,
             "Plan compatibility spike"
+        );
+        assert_eq!(
+            task.project,
+            Some("frontend".to_string())
         );
         assert_eq!(task.status, TaskStatus::Recurring);
         assert_eq!(task.entry, Some(timestamp(100)));

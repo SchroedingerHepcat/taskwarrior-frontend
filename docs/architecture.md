@@ -242,6 +242,7 @@ code and tests in this repository:
 - `entry`
 - `modified`
 - `due`
+- `project`
 - `end`
 - `wait`
 - `annotation_*`
@@ -251,14 +252,18 @@ code and tests in this repository:
 - basic core status transitions for `end` and `modified`
 - basic dependency mapping between product-facing tasks and TaskChampion data
 - basic product-facing query filtering by status, tag, due, and waiting state
-- a transport-neutral backend API skeleton for create, update, transition,
-  dependency, and query operations
-- request validation at the backend boundary for descriptions, status input,
-  dependency shape, and query shape
+- product-facing sorting by due, modified, and description at the server
+  boundary
+- an HTTP backend path for create, get, update, transition, and query
+  operations
+- request validation at the backend boundary for descriptions, project input,
+  tags, annotations, status input, dependency shape, and query shape
 - internal server boundaries for repository storage, compatibility write
   preparation, and sync coordination
 - a Flutter shell boundary that routes user navigation and screen state through
   product-facing client operations rather than Taskwarrior storage concepts
+- full end-to-end create, update, complete, and query flows from Flutter to the
+  Rust backend over HTTP
 
 The following areas are still open and should not be treated as proven yet:
 
@@ -266,10 +271,8 @@ The following areas are still open and should not be treated as proven yet:
 - scheduled and waiting lifecycle rules beyond timestamp mapping and query
   filtering
 - dependency semantics beyond basic `dep_*` mapping and storage shape
-- transport-specific API protocol design
 - durable persistence and real multi-client sync behavior
-- full end-to-end backend connectivity from the Flutter shell over a final wire
-  protocol
+- whether additional protocols are needed beyond the current HTTP boundary
 - task completion and deletion side effects beyond basic `end` timestamping
 - storage, replica orchestration, and sync behavior
 

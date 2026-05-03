@@ -59,7 +59,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(backend.healthChecks, 1);
-    expect(backend.queryCalls, 1);
+    expect(backend.queryCalls, greaterThanOrEqualTo(3));
     expect(find.text('Local development adapter ready'), findsOneWidget);
   });
 }
@@ -67,6 +67,30 @@ void main() {
 class _FakeBackendClient implements TaskBackendClient {
   int healthChecks = 0;
   int queryCalls = 0;
+  final List<TaskItem> _tasks = <TaskItem>[
+    TaskItem(
+      id: 'task-1',
+      title: 'Task shell',
+      project: 'Flutter',
+      status: TaskStatus.pending,
+      tags: const <String>['frontend'],
+      annotations: <TaskAnnotation>[
+        TaskAnnotation(
+          entry: DateTime.utc(2026, 4, 12),
+          description: 'Loaded through the backend client boundary.',
+        ),
+      ],
+      due: DateTime.utc(2026, 4, 13),
+    ),
+    const TaskItem(
+      id: 'task-2',
+      title: 'Recurring review',
+      project: 'Planning',
+      status: TaskStatus.recurring,
+      tags: <String>['dashboard'],
+      annotations: <TaskAnnotation>[],
+    ),
+  ];
 
   @override
   Future<BackendHealth> healthcheck() async {
@@ -82,24 +106,75 @@ class _FakeBackendClient implements TaskBackendClient {
   Future<List<TaskItem>> queryTasks(TaskQuery query) async {
     queryCalls += 1;
 
-    return <TaskItem>[
-      TaskItem(
-        id: 'task-1',
-        title: 'Task shell',
-        summary: 'Loaded through the backend client boundary.',
-        project: 'Flutter',
-        status: TaskStatus.pending,
-        tags: const <String>['frontend'],
-        due: DateTime.utc(2026, 4, 13),
-      ),
-      const TaskItem(
-        id: 'task-2',
-        title: 'Recurring review',
-        summary: 'Used to keep the board and detail views populated.',
-        project: 'Planning',
-        status: TaskStatus.recurring,
-        tags: const <String>['dashboard'],
-      ),
-    ].where(query.matches).toList();
+    return _tasks.where(query.matches).toList();
+  }
+
+  @override
+  Future<TaskItem> createTask(CreateTaskInput input) async {
+    final task = TaskItem(
+      id: 'task-${_tasks.length + 1}',
+      title: input.description,
+      project: null,
+      status: TaskStatus.pending,
+      tags: const <String>[],
+      annotations: const <TaskAnnotation>[],
+    );
+    _tasks.add(task);
+    return task;
+  }
+
+  @override
+  Future<TaskItem> getTask(String taskId) async {
+    return _tasks.firstWhere((task) => task.id == taskId);
+  }
+
+  @override
+  Future<TaskItem> transitionTask(
+    String taskId,
+    TaskTransitionInput input,
+  ) async {
+    final index = _tasks.indexWhere((task) => task.id == taskId);
+    final current = _tasks[index];
+    final updated = TaskItem(
+      id: current.id,
+      title: current.title,
+      project: current.project,
+      status: input.status,
+      tags: current.tags,
+      annotations: current.annotations,
+      due: current.due,
+      waitUntil: current.waitUntil,
+      entry: current.entry,
+      modified: DateTime.utc(2026, 4, 12),
+      end: input.status == TaskStatus.completed
+          ? DateTime.utc(2026, 4, 12)
+          : null,
+    );
+    _tasks[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<TaskItem> updateTask(
+    String taskId,
+    UpdateTaskInput input,
+  ) async {
+    final index = _tasks.indexWhere((task) => task.id == taskId);
+    final current = _tasks[index];
+    final updated = TaskItem(
+      id: current.id,
+      title: input.description ?? current.title,
+      project: input.clearProject ? null : input.project ?? current.project,
+      status: current.status,
+      tags: input.tags ?? current.tags,
+      annotations: current.annotations,
+      due: input.clearDue ? null : input.due ?? current.due,
+      waitUntil: input.clearWait ? null : input.waitUntil ?? current.waitUntil,
+      entry: current.entry,
+      modified: DateTime.utc(2026, 4, 12),
+      end: current.end,
+    );
+    _tasks[index] = updated;
+    return updated;
   }
 }

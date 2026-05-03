@@ -1,4 +1,5 @@
 pub(crate) const PROP_DESCRIPTION: &str = "description";
+pub(crate) const PROP_PROJECT: &str = "project";
 pub(crate) const PROP_STATUS: &str = "status";
 pub(crate) const PROP_ENTRY: &str = "entry";
 pub(crate) const PROP_MODIFIED: &str = "modified";

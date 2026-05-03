@@ -7,14 +7,15 @@ This repository currently contains the initial scaffold for:
 
 - a Rust workspace with core domain, compatibility, and server crates
 - a responsive Flutter client shell with Android, Linux, and web scaffolding
-- early architecture, roadmap, and API boundary notes
+- architecture, roadmap, and API boundary notes aligned to the current build
 
-The Rust server currently includes a transport-neutral API scaffold with
-validated product-facing operations for health, create, update, status
-transition, dependency updates, and query filtering. It does not yet choose a
-wire protocol or implement durable storage or sync orchestration.
+The Rust server currently includes a small HTTP API with validated
+product-facing operations for health, create, get, update, status transition,
+and query filtering. It does not yet implement durable storage, authentication,
+or sync orchestration.
 
 The Flutter app currently includes responsive dashboard, list, board, and
-detail placeholders plus a transport-tolerant backend client boundary for local
-development. It does not yet use a final wire protocol or implement end-to-end
-task mutations against the backend.
+detail screens backed by that HTTP API. It now proves end-to-end create,
+update, complete, and filtered list flows against the Rust backend, while
+later milestones still own recurrence, advanced filtering, deployment, and
+sync.

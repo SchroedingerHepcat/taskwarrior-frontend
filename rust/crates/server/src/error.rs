@@ -4,6 +4,9 @@ use uuid::Uuid;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ValidationError {
     EmptyDescription,
+    EmptyProject,
+    EmptyTag,
+    EmptyAnnotation,
     MissingTaskChanges,
     EmptyRequiredTag,
     UnknownStatusInput,

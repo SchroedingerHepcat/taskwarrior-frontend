@@ -129,6 +129,8 @@ desktop, and web against the backend scaffold.
 
 ## Milestone 4: End-To-End Create, Update, And Complete Flows
 
+Status: complete
+
 ### Goal
 
 Deliver the first real user flows through backend and Flutter layers for task
@@ -163,8 +165,9 @@ creation, editing, completion, and querying.
 ### Notes For This Milestone
 
 - Milestone 3 proved a transport-tolerant client boundary, not a final
-  backend wire protocol. This milestone should be the first one to wire the
-  shell to a real backend path in local development.
+  backend wire protocol. This milestone chooses HTTP for the first real
+  backend path and wires the shell to it in local development and integration
+  testing.
 - Pagination and list envelope shape remain open and may affect the first real
   list and dashboard flows.
 - The current backend update shape is intentionally narrow and will likely need
@@ -173,6 +176,9 @@ creation, editing, completion, and querying.
   waiting-state handling.
 - It is still not fully proven which mutation paths should call more directly
   into TaskChampion semantics and which should remain product-layer logic.
+- The current HTTP surface does not yet expose every internal service
+  operation, including dependency mutation, because this milestone only needed
+  the first end-to-end CRUD and query path.
 
 ## Milestone 5: Taskwarrior Semantics, GTD, And Advanced Views
 

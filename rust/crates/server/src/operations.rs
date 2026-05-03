@@ -1,13 +1,6 @@
-use crate::error::ServiceError;
-use crate::requests::{
-    AddDependencyRequest, CreateTaskRequest, TaskQuery, TransitionTaskRequest,
-    UpdateTaskRequest,
-};
-use crate::service::TaskService;
-use crate::storage::TaskRepository;
-use crate::sync::{CompatibilityGateway, SyncCoordinator};
-use taskwarrior_core::Task;
-use uuid::Uuid;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use taskwarrior_core::{Task, TaskStatus};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ApiMethod {
@@ -23,19 +16,40 @@ pub struct ApiEndpoint {
     pub summary: &'static str,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct HealthResponse {
     pub status: &'static str,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TaskResponse {
-    pub task: Task,
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ApiAnnotation {
+    pub entry: DateTime<Utc>,
+    pub description: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ApiTask {
+    pub id: String,
+    pub description: String,
+    pub project: Option<String>,
+    pub status: String,
+    pub entry: Option<DateTime<Utc>>,
+    pub modified: Option<DateTime<Utc>>,
+    pub due: Option<DateTime<Utc>>,
+    pub end: Option<DateTime<Utc>>,
+    pub wait: Option<DateTime<Utc>>,
+    pub tags: Vec<String>,
+    pub annotations: Vec<ApiAnnotation>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct TaskResponse {
+    pub task: ApiTask,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct TaskListResponse {
-    pub tasks: Vec<Task>,
+    pub tasks: Vec<ApiTask>,
 }
 
 pub fn api_spec() -> &'static [ApiEndpoint] {
@@ -51,6 +65,11 @@ pub fn api_spec() -> &'static [ApiEndpoint] {
             summary: "Create task",
         },
         ApiEndpoint {
+            method: ApiMethod::Get,
+            path: "/tasks/{id}",
+            summary: "Get task detail",
+        },
+        ApiEndpoint {
             method: ApiMethod::Patch,
             path: "/tasks/{id}",
             summary: "Update task fields",
@@ -59,11 +78,6 @@ pub fn api_spec() -> &'static [ApiEndpoint] {
             method: ApiMethod::Post,
             path: "/tasks/{id}/transition",
             summary: "Transition task status",
-        },
-        ApiEndpoint {
-            method: ApiMethod::Post,
-            path: "/tasks/{id}/dependencies",
-            summary: "Add task dependency",
         },
         ApiEndpoint {
             method: ApiMethod::Post,
@@ -77,107 +91,58 @@ pub fn healthcheck() -> &'static str {
     "ok"
 }
 
-pub fn handle_health() -> HealthResponse {
-    HealthResponse {
-        status: healthcheck(),
+pub fn map_task(task: Task) -> ApiTask {
+    ApiTask {
+        id: task.id.to_string(),
+        description: task.description,
+        project: task.project,
+        status: status_label(&task.status).to_string(),
+        entry: task.entry,
+        modified: task.modified,
+        due: task.due,
+        end: task.end,
+        wait: task.wait,
+        tags: task.tags.into_iter().collect(),
+        annotations: task
+            .annotations
+            .into_iter()
+            .map(|annotation| ApiAnnotation {
+                entry: annotation.entry,
+                description: annotation.description,
+            })
+            .collect(),
     }
 }
 
-pub fn handle_create_task<R, C, S>(
-    service: &mut TaskService<R, C, S>,
-    request: CreateTaskRequest,
-) -> Result<TaskResponse, ServiceError>
-where
-    R: TaskRepository,
-    C: CompatibilityGateway,
-    S: SyncCoordinator,
-{
-    service
-        .create_task(request)
-        .map(|task| TaskResponse { task })
+pub fn status_label(status: &TaskStatus) -> &str {
+    match status {
+        TaskStatus::Pending => "pending",
+        TaskStatus::Completed => "completed",
+        TaskStatus::Deleted => "deleted",
+        TaskStatus::Recurring => "recurring",
+        TaskStatus::Unknown(other) => other.as_str(),
+    }
 }
 
-pub fn handle_update_task<R, C, S>(
-    service: &mut TaskService<R, C, S>,
-    task_id: Uuid,
-    request: UpdateTaskRequest,
-) -> Result<TaskResponse, ServiceError>
-where
-    R: TaskRepository,
-    C: CompatibilityGateway,
-    S: SyncCoordinator,
-{
-    service
-        .update_task(task_id, request)
-        .map(|task| TaskResponse { task })
-}
-
-pub fn handle_transition_task<R, C, S>(
-    service: &mut TaskService<R, C, S>,
-    task_id: Uuid,
-    request: TransitionTaskRequest,
-) -> Result<TaskResponse, ServiceError>
-where
-    R: TaskRepository,
-    C: CompatibilityGateway,
-    S: SyncCoordinator,
-{
-    service
-        .transition_task(task_id, request)
-        .map(|task| TaskResponse { task })
-}
-
-pub fn handle_add_dependency<R, C, S>(
-    service: &mut TaskService<R, C, S>,
-    task_id: Uuid,
-    request: AddDependencyRequest,
-) -> Result<TaskResponse, ServiceError>
-where
-    R: TaskRepository,
-    C: CompatibilityGateway,
-    S: SyncCoordinator,
-{
-    service
-        .add_task_dependency(task_id, request)
-        .map(|task| TaskResponse { task })
-}
-
-pub fn handle_query_tasks<R, C, S>(
-    service: &TaskService<R, C, S>,
-    request: TaskQuery,
-) -> Result<TaskListResponse, ServiceError>
-where
-    R: TaskRepository,
-    C: CompatibilityGateway,
-    S: SyncCoordinator,
-{
-    service
-        .query_tasks(&request)
-        .map(|tasks| TaskListResponse { tasks })
+pub fn parse_status(raw: &str) -> TaskStatus {
+    match raw {
+        "pending" => TaskStatus::Pending,
+        "completed" => TaskStatus::Completed,
+        "deleted" => TaskStatus::Deleted,
+        "recurring" => TaskStatus::Recurring,
+        other => TaskStatus::Unknown(other.to_string()),
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{api_spec, handle_create_task, handle_health, ApiMethod};
-    use crate::error::{ServiceError, ValidationError};
-    use crate::requests::CreateTaskRequest;
-    use crate::service::TaskService;
-    use crate::storage::InMemoryTaskRepository;
-    use crate::sync::{
-        InMemorySyncCoordinator, TaskwarriorCompatibilityGateway,
-    };
+    use super::{api_spec, map_task, status_label, ApiMethod};
+    use chrono::{TimeZone, Utc};
+    use taskwarrior_core::{Annotation, Task, TaskStatus};
     use uuid::Uuid;
 
-    fn service() -> TaskService<
-        InMemoryTaskRepository,
-        TaskwarriorCompatibilityGateway,
-        InMemorySyncCoordinator,
-    > {
-        TaskService::new(
-            InMemoryTaskRepository::default(),
-            TaskwarriorCompatibilityGateway,
-            InMemorySyncCoordinator::default(),
-        )
+    fn timestamp(secs: i64) -> chrono::DateTime<Utc> {
+        Utc.timestamp_opt(secs, 0).single().unwrap()
     }
 
     #[test]
@@ -187,40 +152,34 @@ mod tests {
         assert_eq!(endpoints.len(), 6);
         assert!(endpoints.contains(&super::ApiEndpoint {
             method: ApiMethod::Get,
-            path: "/health",
-            summary: "Health check",
-        }));
-        assert!(endpoints.contains(&super::ApiEndpoint {
-            method: ApiMethod::Post,
-            path: "/tasks/query",
-            summary: "Query tasks",
+            path: "/tasks/{id}",
+            summary: "Get task detail",
         }));
     }
 
     #[test]
-    fn health_handler_returns_stable_response() {
+    fn maps_core_task_into_api_task() {
+        let mut task = Task::new(Uuid::from_u128(1), "demo");
+        task.project = Some("frontend".to_string());
+        task.entry = Some(timestamp(10));
+        task.add_tag("home");
+        task.add_annotation(Annotation::new(timestamp(20), "note"));
+
+        let api_task = map_task(task);
+
         assert_eq!(
-            handle_health(),
-            super::HealthResponse { status: "ok" },
+            api_task.id,
+            Uuid::from_u128(1).to_string()
         );
-    }
-
-    #[test]
-    fn create_handler_reports_validation_failures() {
-        let mut service = service();
-
-        let err = handle_create_task(
-            &mut service,
-            CreateTaskRequest {
-                id: Uuid::from_u128(1),
-                description: " ".to_string(),
-            },
-        )
-        .unwrap_err();
-
         assert_eq!(
-            err,
-            ServiceError::Validation(ValidationError::EmptyDescription,),
+            api_task.project,
+            Some("frontend".to_string())
+        );
+        assert_eq!(api_task.tags, vec!["home".to_string()]);
+        assert_eq!(api_task.annotations.len(), 1);
+        assert_eq!(
+            status_label(&TaskStatus::Pending),
+            "pending"
         );
     }
 }

@@ -295,8 +295,7 @@ class _SectionContent extends StatelessWidget {
     switch (currentSection) {
       case ShellSection.dashboard:
         return DashboardScreen(
-          tasks: controller.tasks,
-          health: controller.health,
+          controller: controller,
           onOpenTask: (taskId) {
             controller.selectTask(taskId);
             Navigator.of(context).pushReplacementNamed(
@@ -306,7 +305,7 @@ class _SectionContent extends StatelessWidget {
         );
       case ShellSection.tasks:
         return TaskListScreen(
-          tasks: controller.tasks,
+          controller: controller,
           onOpenTask: (taskId) {
             controller.selectTask(taskId);
             Navigator.of(context).pushReplacementNamed(
@@ -316,15 +315,13 @@ class _SectionContent extends StatelessWidget {
         );
       case ShellSection.board:
         return BoardScreen(
-          tasks: controller.tasks,
+          tasks: controller.allTasks,
           onOpenTask: controller.selectTask,
           onQueueMove: controller.recordBoardIntent,
         );
       case ShellSection.detail:
         return TaskDetailScreen(
-          task: controller.selectedTask,
-          health: controller.health,
-          boardIntent: controller.boardIntent,
+          controller: controller,
           showContextHeader: !showContext,
         );
     }

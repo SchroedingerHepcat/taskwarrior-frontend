@@ -1,176 +1,123 @@
 import 'package:flutter/material.dart';
 
+import '../../app/shell_controller.dart';
 import '../../models/shell_models.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({
     super.key,
-    required this.tasks,
-    required this.health,
+    required this.controller,
     required this.onOpenTask,
   });
 
-  final List<TaskItem> tasks;
-  final BackendHealth? health;
+  final ShellController controller;
   final ValueChanged<String> onOpenTask;
 
   @override
   Widget build(BuildContext context) {
-    final referenceTime = DateTime.now();
-    final pending =
-        tasks.where((task) => task.status == TaskStatus.pending).length;
-    final waiting =
-        tasks.where((task) => task.isWaitingAt(referenceTime)).length;
-    final recurring =
-        tasks.where((task) => task.status == TaskStatus.recurring).length;
-    final completed =
-        tasks.where((task) => task.status == TaskStatus.completed).length;
-
-    final cards = <_MetricCardData>[
-      _MetricCardData(
-        title: 'Ready now',
-        value: pending - waiting,
-        detail: 'Tasks visible in the main lists',
-        tint: const Color(0xFF16343F),
-      ),
-      _MetricCardData(
-        title: 'Waiting',
-        value: waiting,
-        detail: 'Tasks hidden until wait expires',
-        tint: const Color(0xFF6E7D3C),
-      ),
-      _MetricCardData(
-        title: 'Recurring',
-        value: recurring,
-        detail: 'Recurring placeholders using shared task queries',
-        tint: const Color(0xFFCB5D39),
-      ),
-      _MetricCardData(
-        title: 'Completed',
-        value: completed,
-        detail: 'Terminal tasks for review views',
-        tint: const Color(0xFF4C6A8A),
-      ),
-    ];
+    final widgets = controller.enabledWidgets.toList()
+      ..sort((left, right) => left.index.compareTo(right.index));
 
     return ListView(
       key: const Key('dashboard-screen'),
       children: <Widget>[
         Text(
-          'Configurable dashboard placeholder',
+          'Configurable dashboard',
           style: Theme.of(context).textTheme.titleLarge,
         ),
         const SizedBox(height: 8),
         const Text(
-          'One shared task query can power summary cards, '
-          'lists, and detail entry points.',
+          'Each widget is backed by a real server query, not a local filter.',
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: DashboardWidgetType.values.map((widget) {
+            final selected = controller.enabledWidgets.contains(widget);
+
+            return FilterChip(
+              label: Text(widget.title),
+              selected: selected,
+              onSelected: (_) => controller.toggleWidget(widget),
+            );
+          }).toList(),
         ),
         const SizedBox(height: 20),
         LayoutBuilder(
           builder: (context, constraints) {
-            final crossAxisCount = constraints.maxWidth >= 960
-                ? 4
+            final columns = constraints.maxWidth >= 920
+                ? 3
                 : constraints.maxWidth >= 620
                     ? 2
                     : 1;
-
-            final childAspectRatio = crossAxisCount == 1
-                ? 2.4
-                : crossAxisCount == 2
-                    ? 1.25
-                    : 1.0;
 
             return GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: crossAxisCount,
+                crossAxisCount: columns,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
-                childAspectRatio: childAspectRatio,
+                childAspectRatio: columns == 1 ? 2.0 : 1.2,
               ),
-              itemCount: cards.length,
+              itemCount: widgets.length,
               itemBuilder: (context, index) {
-                final card = cards[index];
+                final widgetType = widgets[index];
+                final widgetData = controller.widgetDataFor(widgetType);
 
-                return Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: card.tint.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            child: Text(card.title),
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          '${card.value}',
-                          style: Theme.of(context).textTheme.headlineMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(card.detail),
-                      ],
-                    ),
-                  ),
+                return _DashboardWidgetCard(
+                  data: widgetData,
+                  onOpenTask: onOpenTask,
                 );
               },
             );
           },
-        ),
-        const SizedBox(height: 20),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  'Backend scaffold',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                Text(health?.environment ?? 'Connecting'),
-                const SizedBox(height: 16),
-                for (final task in tasks.take(3))
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(task.title),
-                    subtitle: Text(task.project),
-                    trailing: const Icon(
-                      Icons.arrow_forward_ios_outlined,
-                      size: 18,
-                    ),
-                    onTap: () => onOpenTask(task.id),
-                  ),
-              ],
-            ),
-          ),
         ),
       ],
     );
   }
 }
 
-class _MetricCardData {
-  const _MetricCardData({
-    required this.title,
-    required this.value,
-    required this.detail,
-    required this.tint,
+class _DashboardWidgetCard extends StatelessWidget {
+  const _DashboardWidgetCard({
+    required this.data,
+    required this.onOpenTask,
   });
 
-  final String title;
-  final int value;
-  final String detail;
-  final Color tint;
+  final DashboardWidgetData? data;
+  final ValueChanged<String> onOpenTask;
+
+  @override
+  Widget build(BuildContext context) {
+    final widgetData = data;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              widgetData?.widget.title ?? 'Loading',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text('${widgetData?.tasks.length ?? 0} tasks'),
+            const SizedBox(height: 16),
+            if (widgetData == null || widgetData.tasks.isEmpty)
+              const Text('No tasks matched this server query.')
+            else
+              for (final task in widgetData.tasks.take(3))
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(task.title),
+                  subtitle: Text(task.project ?? 'No project'),
+                  onTap: () => onOpenTask(task.id),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
 }

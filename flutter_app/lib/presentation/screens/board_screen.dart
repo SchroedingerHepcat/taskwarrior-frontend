@@ -224,7 +224,7 @@ class _BoardCard extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                task.project,
+                task.project ?? 'No project',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ],

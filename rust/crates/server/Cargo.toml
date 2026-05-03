@@ -5,13 +5,21 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+axum = { version = "0.8.6", features = ["json", "macros"] }
 chrono = { version = "0.4.42", default-features = false, features = [
   "clock",
   "std",
 ] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
 taskwarrior_core = { path = "../taskwarrior_core" }
 taskwarrior_compat = { path = "../taskwarrior_compat" }
+tokio = { version = "1.48.0", features = ["macros", "rt-multi-thread"] }
+tower-http = { version = "0.6.6", features = ["cors"] }
 uuid = { version = "1.18.1", features = ["std"] }
+
+[dev-dependencies]
+tower = "0.5.2"
 
 [lib]
 path = "src/lib.rs"

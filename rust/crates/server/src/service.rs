@@ -1,10 +1,11 @@
 use crate::error::ServiceError;
 use crate::requests::{
-    AddDependencyRequest, CreateTaskRequest, TaskQuery, TransitionTaskRequest,
-    UpdateTaskRequest,
+    AddDependencyRequest, CreateTaskRequest, TaskQuery, TaskSort,
+    TransitionTaskRequest, UpdateTaskRequest,
 };
 use crate::storage::TaskRepository;
 use crate::sync::{CompatibilityGateway, SyncCoordinator};
+use chrono::{DateTime, Utc};
 use taskwarrior_core::Task;
 use uuid::Uuid;
 
@@ -48,9 +49,18 @@ where
     ) -> Result<Task, ServiceError> {
         request.validate()?;
 
-        let task = Task::new(request.id, request.description.trim());
+        let mut task = Task::new(request.id, request.description.trim());
+        task.entry = Some(request.created_at);
+        task.modified = Some(request.created_at);
 
         self.persist(task)
+    }
+
+    pub fn get_task(
+        &self,
+        task_id: Uuid,
+    ) -> Result<Task, ServiceError> {
+        self.load(task_id)
     }
 
     pub fn update_task(
@@ -98,12 +108,19 @@ where
     ) -> Result<Vec<Task>, ServiceError> {
         query.validate()?;
 
-        Ok(self
+        let mut tasks: Vec<Task> = self
             .repository
             .list()
             .into_iter()
             .filter(|task| query.matches(task))
-            .collect())
+            .collect();
+        sort_tasks(
+            &mut tasks,
+            query.sort,
+            query.reference_time,
+        );
+
+        Ok(tasks)
     }
 
     fn load(
@@ -130,13 +147,43 @@ where
     }
 }
 
+fn sort_tasks(
+    tasks: &mut [Task],
+    sort: TaskSort,
+    reference_time: DateTime<Utc>,
+) {
+    match sort {
+        TaskSort::DueAsc => {
+            tasks.sort_by_key(|task| {
+                (
+                    task.due.unwrap_or(
+                        reference_time + chrono::Duration::days(3650),
+                    ),
+                    task.description.clone(),
+                )
+            });
+        }
+        TaskSort::ModifiedDesc => {
+            tasks.sort_by_key(|task| {
+                std::cmp::Reverse((
+                    task.modified.unwrap_or(reference_time),
+                    task.description.clone(),
+                ))
+            });
+        }
+        TaskSort::DescriptionAsc => {
+            tasks.sort_by_key(|task| task.description.clone());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::TaskService;
     use crate::error::{ServiceError, ValidationError};
     use crate::requests::{
-        AddDependencyRequest, CreateTaskRequest, TaskQuery,
-        TransitionTaskRequest, UpdateTaskRequest,
+        CreateTaskRequest, TaskQuery, TaskSort, TransitionTaskRequest,
+        UpdateTaskRequest,
     };
     use crate::storage::{InMemoryTaskRepository, TaskRepository};
     use crate::sync::{
@@ -171,6 +218,7 @@ mod tests {
             .create_task(CreateTaskRequest {
                 id: task_id,
                 description: "Inbox".to_string(),
+                created_at: timestamp(100),
             })
             .unwrap();
 
@@ -179,8 +227,14 @@ mod tests {
                 task_id,
                 UpdateTaskRequest {
                     description: Some("Inbox clarified".to_string()),
+                    project: Some("frontend".to_string()),
+                    clear_project: false,
+                    tags: Some(vec!["home".to_string()]),
                     due: Some(timestamp(200)),
+                    clear_due: false,
                     wait: None,
+                    clear_wait: false,
+                    add_annotation: Some("first note".to_string()),
                     modified_at: timestamp(150),
                 },
             )
@@ -199,16 +253,20 @@ mod tests {
         let queried = service
             .query_tasks(&TaskQuery {
                 statuses: vec![TaskStatus::Completed],
-                required_tag: None,
+                required_tag: Some("home".to_string()),
                 due_before: Some(timestamp(250)),
                 include_waiting: true,
                 reference_time: timestamp(400),
+                sort: TaskSort::DueAsc,
             })
             .unwrap();
 
-        assert_eq!(created.description, "Inbox");
-        assert_eq!(updated.description, "Inbox clarified");
-        assert_eq!(updated.modified, Some(timestamp(150)));
+        assert_eq!(created.entry, Some(timestamp(100)));
+        assert_eq!(
+            updated.project,
+            Some("frontend".to_string())
+        );
+        assert_eq!(updated.annotations.len(), 1);
         assert_eq!(completed.end, Some(timestamp(300)));
         assert_eq!(queried, vec![completed.clone()]);
         assert_eq!(service.sync().writes().len(), 3);
@@ -216,27 +274,21 @@ mod tests {
     }
 
     #[test]
-    fn service_records_dependency_updates_without_storage_leaks() {
+    fn service_returns_task_by_id() {
         let mut service = service();
-        let task_id = Uuid::from_u128(110);
-        let dependency = Uuid::from_u128(111);
+        let task_id = Uuid::from_u128(101);
 
         service
             .create_task(CreateTaskRequest {
                 id: task_id,
-                description: "Depends".to_string(),
+                description: "Find me".to_string(),
+                created_at: timestamp(100),
             })
             .unwrap();
 
-        let updated = service
-            .add_task_dependency(
-                task_id,
-                AddDependencyRequest { dependency },
-            )
-            .unwrap();
+        let task = service.get_task(task_id).unwrap();
 
-        assert!(updated.dependencies.contains(&dependency));
-        assert_eq!(service.sync().writes().len(), 2);
+        assert_eq!(task.description, "Find me");
     }
 
     #[test]
@@ -247,6 +299,7 @@ mod tests {
             .create_task(CreateTaskRequest {
                 id: Uuid::from_u128(120),
                 description: " ".to_string(),
+                created_at: timestamp(10),
             })
             .unwrap_err();
 

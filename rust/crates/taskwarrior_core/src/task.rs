@@ -22,6 +22,7 @@ impl TaskStatus {
 pub struct Task {
     pub id: Uuid,
     pub description: String,
+    pub project: Option<String>,
     pub status: TaskStatus,
     pub entry: Option<DateTime<Utc>>,
     pub modified: Option<DateTime<Utc>>,
@@ -42,6 +43,7 @@ impl Task {
         Self {
             id,
             description: description.into(),
+            project: None,
             status: TaskStatus::Pending,
             entry: None,
             modified: None,
@@ -92,6 +94,13 @@ impl Task {
         self.tags.insert(tag.into());
     }
 
+    pub fn set_project(
+        &mut self,
+        project: Option<impl Into<String>>,
+    ) {
+        self.project = project.map(|value| value.into());
+    }
+
     pub fn add_dependency(
         &mut self,
         dependency: Uuid,
@@ -137,6 +146,7 @@ mod tests {
 
         assert_eq!(task.id, Uuid::from_u128(1));
         assert_eq!(task.description, "Compatibility spike");
+        assert_eq!(task.project, None);
         assert_eq!(task.status, TaskStatus::Pending);
         assert_eq!(task.entry, None);
         assert_eq!(task.modified, None);
@@ -157,9 +167,11 @@ mod tests {
         let mut task = Task::new(Uuid::from_u128(5), "Date test");
         task.modified = Some(timestamp(100));
         task.due = Some(timestamp(200));
+        task.set_project(Some("ops"));
 
         assert_eq!(task.modified, Some(timestamp(100)));
         assert_eq!(task.due, Some(timestamp(200)));
+        assert_eq!(task.project, Some("ops".to_string()));
         assert_eq!(task.end, None);
         assert_eq!(task.wait, None);
     }

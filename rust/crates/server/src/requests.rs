@@ -1,13 +1,21 @@
 use crate::ValidationError;
 use chrono::{DateTime, Utc};
-use taskwarrior_core::Task;
-use taskwarrior_core::TaskStatus;
+use std::collections::BTreeSet;
+use taskwarrior_core::{Annotation, Task, TaskStatus};
 use uuid::Uuid;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TaskSort {
+    DueAsc,
+    ModifiedDesc,
+    DescriptionAsc,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateTaskRequest {
     pub id: Uuid,
     pub description: String,
+    pub created_at: DateTime<Utc>,
 }
 
 impl CreateTaskRequest {
@@ -23,16 +31,28 @@ impl CreateTaskRequest {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UpdateTaskRequest {
     pub description: Option<String>,
+    pub project: Option<String>,
+    pub clear_project: bool,
+    pub tags: Option<Vec<String>>,
     pub due: Option<DateTime<Utc>>,
+    pub clear_due: bool,
     pub wait: Option<DateTime<Utc>>,
+    pub clear_wait: bool,
+    pub add_annotation: Option<String>,
     pub modified_at: DateTime<Utc>,
 }
 
 impl UpdateTaskRequest {
     pub fn validate(&self) -> Result<(), ValidationError> {
         if self.description.is_none()
+            && self.project.is_none()
+            && !self.clear_project
+            && self.tags.is_none()
             && self.due.is_none()
+            && !self.clear_due
             && self.wait.is_none()
+            && !self.clear_wait
+            && self.add_annotation.is_none()
         {
             return Err(ValidationError::MissingTaskChanges);
         }
@@ -43,6 +63,28 @@ impl UpdateTaskRequest {
             .is_some_and(|description| description.trim().is_empty())
         {
             return Err(ValidationError::EmptyDescription);
+        }
+
+        if self
+            .project
+            .as_ref()
+            .is_some_and(|project| project.trim().is_empty())
+        {
+            return Err(ValidationError::EmptyProject);
+        }
+
+        if self
+            .add_annotation
+            .as_ref()
+            .is_some_and(|note| note.trim().is_empty())
+        {
+            return Err(ValidationError::EmptyAnnotation);
+        }
+
+        if let Some(tags) = &self.tags {
+            if tags.iter().any(|tag| tag.trim().is_empty()) {
+                return Err(ValidationError::EmptyTag);
+            }
         }
 
         Ok(())
@@ -56,12 +98,33 @@ impl UpdateTaskRequest {
             task.description = description.trim().to_string();
         }
 
-        if let Some(due) = self.due {
+        if self.clear_project {
+            task.project = None;
+        } else if let Some(project) = &self.project {
+            task.project = Some(project.trim().to_string());
+        }
+
+        if let Some(tags) = &self.tags {
+            task.tags = normalized_tags(tags);
+        }
+
+        if self.clear_due {
+            task.due = None;
+        } else if let Some(due) = self.due {
             task.due = Some(due);
         }
 
-        if let Some(wait) = self.wait {
+        if self.clear_wait {
+            task.wait = None;
+        } else if let Some(wait) = self.wait {
             task.wait = Some(wait);
+        }
+
+        if let Some(note) = &self.add_annotation {
+            task.add_annotation(Annotation::new(
+                self.modified_at,
+                note.trim(),
+            ));
         }
 
         task.modified = Some(self.modified_at);
@@ -109,9 +172,21 @@ pub struct TaskQuery {
     pub due_before: Option<DateTime<Utc>>,
     pub include_waiting: bool,
     pub reference_time: DateTime<Utc>,
+    pub sort: TaskSort,
 }
 
 impl TaskQuery {
+    pub fn all(reference_time: DateTime<Utc>) -> Self {
+        Self {
+            statuses: Vec::new(),
+            required_tag: None,
+            due_before: None,
+            include_waiting: true,
+            reference_time,
+            sort: TaskSort::DueAsc,
+        }
+    }
+
     pub fn validate(&self) -> Result<(), ValidationError> {
         if self
             .statuses
@@ -149,10 +224,16 @@ impl TaskQuery {
     }
 }
 
+fn normalized_tags(tags: &[String]) -> BTreeSet<String> {
+    tags.iter()
+        .map(|tag| tag.trim().to_string())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        AddDependencyRequest, CreateTaskRequest, TaskQuery,
+        AddDependencyRequest, CreateTaskRequest, TaskQuery, TaskSort,
         TransitionTaskRequest, UpdateTaskRequest,
     };
     use crate::ValidationError;
@@ -169,6 +250,7 @@ mod tests {
         let request = CreateTaskRequest {
             id: Uuid::from_u128(1),
             description: "   ".to_string(),
+            created_at: timestamp(10),
         };
 
         assert_eq!(
@@ -181,8 +263,14 @@ mod tests {
     fn update_task_request_requires_a_change() {
         let request = UpdateTaskRequest {
             description: None,
+            project: None,
+            clear_project: false,
+            tags: None,
             due: None,
+            clear_due: false,
             wait: None,
+            clear_wait: false,
+            add_annotation: None,
             modified_at: timestamp(10),
         };
 
@@ -190,6 +278,39 @@ mod tests {
             request.validate(),
             Err(ValidationError::MissingTaskChanges),
         );
+    }
+
+    #[test]
+    fn update_request_applies_project_tags_and_annotation() {
+        let mut task = Task::new(Uuid::from_u128(2), "initial");
+        let request = UpdateTaskRequest {
+            description: Some("updated".to_string()),
+            project: Some("frontend".to_string()),
+            clear_project: false,
+            tags: Some(vec![
+                "home".to_string(),
+                "next".to_string(),
+            ]),
+            due: Some(timestamp(20)),
+            clear_due: false,
+            wait: None,
+            clear_wait: true,
+            add_annotation: Some("added note".to_string()),
+            modified_at: timestamp(30),
+        };
+
+        request.apply_to(&mut task);
+
+        assert_eq!(task.description, "updated");
+        assert_eq!(
+            task.project,
+            Some("frontend".to_string())
+        );
+        assert!(task.tags.contains("home"));
+        assert_eq!(task.due, Some(timestamp(20)));
+        assert_eq!(task.wait, None);
+        assert_eq!(task.annotations.len(), 1);
+        assert_eq!(task.modified, Some(timestamp(30)));
     }
 
     #[test]
@@ -231,6 +352,7 @@ mod tests {
             due_before: Some(timestamp(120)),
             include_waiting: false,
             reference_time: timestamp(140),
+            sort: TaskSort::DueAsc,
         };
 
         assert!(!query.matches(&task));
