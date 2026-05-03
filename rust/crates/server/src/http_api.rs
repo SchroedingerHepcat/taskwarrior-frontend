@@ -1,3 +1,4 @@
+use crate::config::BackendConfig;
 use crate::error::ServiceError;
 use crate::operations::{
     api_spec, healthcheck, map_task, parse_status, HealthResponse,
@@ -37,9 +38,30 @@ impl Default for AppState {
         Self {
             service: Arc::new(Mutex::new(TaskService::new(
                 TaskChampionTaskRepository::default(),
-                InMemorySyncCoordinator::default(),
+                InMemorySyncCoordinator::disabled(),
             ))),
         }
+    }
+}
+
+impl AppState {
+    pub async fn from_config(
+        config: BackendConfig
+    ) -> Result<Self, ServiceError> {
+        let repository =
+            TaskChampionTaskRepository::from_storage_config(config.storage)
+                .await?;
+        let sync = if config.sync.is_enabled() {
+            InMemorySyncCoordinator::configured(config.sync)
+        } else {
+            InMemorySyncCoordinator::disabled()
+        };
+
+        Ok(Self {
+            service: Arc::new(Mutex::new(TaskService::new(
+                repository, sync,
+            ))),
+        })
     }
 }
 

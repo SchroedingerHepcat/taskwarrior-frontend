@@ -1,4 +1,7 @@
-use taskwarrior_compat::{CompatibilityError, TaskChampionTaskStore};
+use taskwarrior_compat::{
+    CompatibilityError, TaskChampionStorageConfig, TaskChampionSyncConfig,
+    TaskChampionSyncReport, TaskChampionTaskStore,
+};
 use taskwarrior_core::Task;
 use uuid::Uuid;
 
@@ -15,6 +18,11 @@ pub trait TaskRepository {
         &mut self,
         task: Task,
     ) -> Result<StoredTask, CompatibilityError>;
+
+    async fn sync(
+        &mut self,
+        config: TaskChampionSyncConfig,
+    ) -> Result<TaskChampionSyncReport, CompatibilityError>;
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -31,6 +39,14 @@ pub struct TaskChampionTaskRepository {
 impl TaskChampionTaskRepository {
     pub fn new(store: TaskChampionTaskStore) -> Self {
         Self { store }
+    }
+
+    pub async fn from_storage_config(
+        config: TaskChampionStorageConfig
+    ) -> Result<Self, CompatibilityError> {
+        Ok(Self {
+            store: TaskChampionTaskStore::from_config(config).await?,
+        })
     }
 }
 
@@ -56,5 +72,12 @@ impl TaskRepository for TaskChampionTaskRepository {
             task: write.task,
             operation_count: write.operation_count,
         })
+    }
+
+    async fn sync(
+        &mut self,
+        config: TaskChampionSyncConfig,
+    ) -> Result<TaskChampionSyncReport, CompatibilityError> {
+        self.store.sync(config).await
     }
 }

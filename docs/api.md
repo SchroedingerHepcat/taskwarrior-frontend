@@ -8,7 +8,8 @@ create, read, update, transition, and query flows.
 
 This is still a narrow product-facing boundary. It proves end-to-end behavior
 without exposing TaskChampion storage details or claiming that transport,
-authentication, pagination, or sync behavior are settled.
+authentication, pagination, user-facing sync controls, or conflict behavior
+are settled.
 
 The intended storage direction is Taskwarrior 3 and TaskChampion directly. The
 HTTP API remains product-facing, while server CRUD handlers now route through
@@ -66,6 +67,10 @@ The current update shape is still intentionally narrow:
 The server still has an internal product-facing dependency operation, but that
 operation is not yet part of the current HTTP surface.
 
+The current HTTP surface does not expose sync configuration, TaskChampion
+replica details, or TaskChampion sync-server credentials. Those remain backend
+setup concerns.
+
 ## Current Internal Service Boundaries
 
 The server crate now separates:
@@ -75,14 +80,28 @@ The server crate now separates:
 - task service logic for create, update, transition, dependency, and query
 - TaskChampion-backed repository storage behind a `TaskRepository` trait
 - sync orchestration behind a `SyncCoordinator` trait
-- future durable TaskChampion storage configuration behind Rust service
-  boundaries
-- future external TaskChampion sync server configuration behind Rust service
-  boundaries
+- TaskChampion storage configuration behind Rust service boundaries, with
+  in-memory storage for tests and SQLite-backed storage for durable paths
+- TaskChampion sync configuration behind Rust service boundaries, covering
+  disabled sync, local TaskChampion sync-server tests, and remote sync-server
+  connection details
 
-This is sufficient for Milestone 4 because it proves the backend can expose a
-real wire-level path while keeping compatibility and sync concerns behind Rust
-service boundaries.
+The server boundary now proves that local TaskChampion sync can move tasks
+between two backend replicas without exposing TaskChampion internals to
+Flutter. It does not yet prove compatibility with a separately hosted remote
+TaskChampion sync server.
+
+The internal TaskChampion sync configuration maps to the TaskChampion crate's
+sync client API:
+
+- local test sync uses a server directory
+- remote sync uses server URL, client id, and encryption secret
+- HTTPS is required for remote sync unless plain HTTP is explicitly allowed in
+  backend setup
+- TLS trust comes from the TaskChampion HTTP sync client stack with rustls
+  webpki roots enabled
+- task storage uses in-memory TaskChampion storage for tests or SQLite-backed
+  TaskChampion storage for durable backend paths
 
 ## Boundary Rules
 
@@ -105,11 +124,11 @@ service boundaries.
 
 ## Open questions
 
-- sync model
-- external TaskChampion sync server configuration and credentials
-- durable TaskChampion storage configuration
+- public sync status and control endpoints, if any
+- externally hosted TaskChampion sync-server compatibility test coverage
 - authentication model
 - offline write reconciliation
+- conflict behavior across synchronized replicas
 - pagination and list result shape
 - how advanced filtering and saved queries map onto product-facing query
   objects

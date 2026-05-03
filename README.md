@@ -13,12 +13,18 @@ The Rust server currently includes a small HTTP API with validated
 product-facing operations for health, create, get, update, status transition,
 and query filtering. Server CRUD now routes through TaskChampion-backed
 storage rather than a separate custom task database. It does not yet implement
-durable storage configuration, authentication, or sync orchestration.
+authentication, user-facing sync controls, or conflict handling.
+
+The Rust backend has internal configuration for in-memory TaskChampion storage
+used by tests and SQLite-backed TaskChampion storage for durable deployment
+paths. It also has an internal sync coordinator boundary and a local
+TaskChampion sync proof between two backend replicas.
 
 The intended sync model is to let this backend act as a TaskChampion replica
 that can connect to a separately hosted TaskChampion sync server. This project
 is intended to provide a good frontend and product API for TaskChampion data,
-not replace the upstream TaskChampion sync server.
+not replace the upstream TaskChampion sync server. Compatibility with a real
+external TaskChampion sync server remains an explicit proof gap.
 
 The Flutter app currently includes responsive dashboard, list, board, and
 detail screens backed by that HTTP API. It now proves end-to-end create,

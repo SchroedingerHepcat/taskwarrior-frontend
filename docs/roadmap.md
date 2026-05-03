@@ -315,11 +315,14 @@ deployment and basic operational controls.
 ### Notes For This Milestone
 
 - Authentication and authorization are still open carryover from Milestone 2.
-- Durable TaskChampion-backed storage, migration, backup, and deployment-safe
-  configuration are still open carryover from the current in-memory
-  TaskChampion storage backend.
-- External TaskChampion sync server URL, credentials, TLS expectations, and
-  failure behavior still need concrete configuration decisions.
+- Internal backend configuration now supports in-memory TaskChampion storage
+  for tests and SQLite-backed TaskChampion storage for durable paths.
+- Internal backend sync configuration now models disabled sync, local
+  TaskChampion sync-server tests, and remote sync-server connection details,
+  including URL, client id, encryption secret, and plain-HTTP policy.
+- Deployment packaging, migration, backup, and operational validation for
+  durable TaskChampion storage remain open.
+- A real external TaskChampion sync-server deployment test remains open.
 
 ## Milestone 7: Sync, Error, And Conflict UX
 
@@ -357,7 +360,8 @@ clients, especially once multiple devices are in use.
 
 ### Notes For This Milestone
 
-- Sync orchestration remains open beyond the current internal coordinator seam.
+- Sync orchestration now has an internal coordinator seam and a local
+  TaskChampion sync proof between two backend replicas.
 - Compatibility with a separately hosted TaskChampion sync server remains open
   until tested against that server or an equivalent test service.
 - Offline write reconciliation remains open.

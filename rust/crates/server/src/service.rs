@@ -4,7 +4,9 @@ use crate::requests::{
     TransitionTaskRequest, UpdateTaskRequest,
 };
 use crate::storage::TaskRepository;
-use crate::sync::{PreparedTaskWrite, SyncCoordinator};
+use crate::sync::{
+    PreparedTaskWrite, SyncAttempt, SyncCoordinator, SyncMode, SyncStatus,
+};
 use chrono::{DateTime, Utc};
 use taskwarrior_core::Task;
 use uuid::Uuid;
@@ -117,6 +119,37 @@ where
         Ok(tasks)
     }
 
+    pub async fn sync_tasks(&mut self) -> Result<SyncAttempt, ServiceError> {
+        if matches!(self.sync.mode(), SyncMode::Disabled) {
+            let attempt = SyncAttempt {
+                status: SyncStatus::Disabled,
+            };
+            self.sync
+                .record_sync_attempt(attempt.clone())
+                .map_err(ServiceError::Sync)?;
+
+            return Ok(attempt);
+        }
+
+        let config = self.sync.sync_config();
+        let attempt = match self.repository.sync(config).await {
+            Ok(report) => SyncAttempt {
+                status: SyncStatus::Synced {
+                    task_count: report.task_count,
+                },
+            },
+            Err(error) => SyncAttempt {
+                status: SyncStatus::Failed(error.to_string()),
+            },
+        };
+
+        self.sync
+            .record_sync_attempt(attempt.clone())
+            .map_err(ServiceError::Sync)?;
+
+        Ok(attempt)
+    }
+
     async fn load(
         &mut self,
         task_id: Uuid,
@@ -182,8 +215,13 @@ mod tests {
         UpdateTaskRequest,
     };
     use crate::storage::TaskChampionTaskRepository;
-    use crate::sync::InMemorySyncCoordinator;
+    use crate::sync::{InMemorySyncCoordinator, SyncStatus};
     use chrono::{TimeZone, Utc};
+    use std::fs;
+    use std::path::PathBuf;
+    use taskwarrior_compat::{
+        TaskChampionLocalSyncConfig, TaskChampionSyncConfig,
+    };
     use taskwarrior_core::TaskStatus;
     use uuid::Uuid;
 
@@ -195,8 +233,24 @@ mod tests {
     ) -> TaskService<TaskChampionTaskRepository, InMemorySyncCoordinator> {
         TaskService::new(
             TaskChampionTaskRepository::default(),
-            InMemorySyncCoordinator::default(),
+            InMemorySyncCoordinator::disabled(),
         )
+    }
+
+    fn sync_service(
+        config: TaskChampionSyncConfig
+    ) -> TaskService<TaskChampionTaskRepository, InMemorySyncCoordinator> {
+        TaskService::new(
+            TaskChampionTaskRepository::default(),
+            InMemorySyncCoordinator::configured(config),
+        )
+    }
+
+    fn temp_path(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "taskwarrior-frontend-server-{name}-{}",
+            Uuid::new_v4()
+        ))
     }
 
     #[tokio::test]
@@ -365,5 +419,58 @@ mod tests {
             .unwrap()
             .is_empty());
         assert!(service.sync().writes().is_empty());
+    }
+
+    #[tokio::test]
+    async fn disabled_sync_records_disabled_attempt() {
+        let mut service = service();
+        let sync = service.sync_tasks().await.unwrap();
+
+        assert_eq!(sync.status, SyncStatus::Disabled);
+        assert_eq!(service.sync().attempts(), &[sync]);
+    }
+
+    #[tokio::test]
+    async fn local_taskchampion_sync_moves_tasks_between_services() {
+        let server_dir = temp_path("local-sync");
+        fs::create_dir_all(&server_dir).unwrap();
+        let sync_config =
+            TaskChampionSyncConfig::Local(TaskChampionLocalSyncConfig {
+                server_dir: server_dir.clone(),
+            });
+        let task_id = Uuid::from_u128(130);
+        let mut source = sync_service(sync_config.clone());
+        let mut target = sync_service(sync_config);
+
+        source
+            .create_task(CreateTaskRequest {
+                id: task_id,
+                description: "Sync through TaskChampion".to_string(),
+                created_at: timestamp(100),
+            })
+            .await
+            .unwrap();
+        let source_sync = source.sync_tasks().await.unwrap();
+        let target_sync = target.sync_tasks().await.unwrap();
+        let queried = target
+            .query_tasks(&TaskQuery::all(timestamp(200)))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            source_sync.status,
+            SyncStatus::Synced { task_count: 1 },
+        );
+        assert_eq!(
+            target_sync.status,
+            SyncStatus::Synced { task_count: 1 },
+        );
+        assert_eq!(queried.len(), 1);
+        assert_eq!(
+            queried[0].description,
+            "Sync through TaskChampion"
+        );
+
+        let _ = fs::remove_dir_all(server_dir);
     }
 }

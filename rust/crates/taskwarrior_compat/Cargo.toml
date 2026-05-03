@@ -6,7 +6,13 @@ license.workspace = true
 
 [dependencies]
 taskwarrior_core = { path = "../taskwarrior_core" }
-taskchampion = { version = "3.0.1", default-features = false }
+taskchampion = { version = "3.0.1", default-features = false, features = [
+  "bundled",
+  "server-local",
+  "server-sync",
+  "storage-sqlite",
+  "tls-webpki-roots",
+] }
 
 [dev-dependencies]
 tokio = { version = "1.48.0", features = ["macros", "rt-multi-thread"] }

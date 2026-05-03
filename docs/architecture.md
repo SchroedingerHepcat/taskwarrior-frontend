@@ -311,6 +311,12 @@ code and tests in this repository:
 - internal server boundaries for TaskChampion-backed repository storage and
   sync coordination
 - server CRUD backed by a TaskChampion `Replica` using TaskChampion storage
+- backend storage configuration for in-memory test storage and SQLite-backed
+  TaskChampion storage
+- backend sync configuration for disabled sync, local TaskChampion sync-server
+  tests, and remote sync-server connection details
+- local TaskChampion sync proof moving a task between two backend replicas
+  through TaskChampion sync APIs
 - a Flutter shell boundary that routes user navigation and screen state through
   product-facing client operations rather than Taskwarrior storage concepts
 - full end-to-end create, update, complete, and query flows from Flutter to the
@@ -324,14 +330,14 @@ The following areas are still open and should not be treated as proven yet:
 - scheduled and waiting lifecycle rules beyond timestamp mapping and query
   filtering
 - dependency semantics beyond basic `dep_*` mapping and storage shape
-- durable persistence and real multi-client sync behavior
-- durable TaskChampion storage configuration beyond the current in-memory
-  TaskChampion storage backend
-- configuration and tests for syncing the backend replica with an external
-  TaskChampion sync server
+- production deployment of durable TaskChampion storage, including migration,
+  backup, and operational checks
+- sync conflict behavior, retry behavior, and user-facing sync state
+- tests for syncing the backend replica with an external remote TaskChampion
+  sync server
 - whether additional protocols are needed beyond the current HTTP boundary
 - task completion and deletion side effects beyond basic `end` timestamping
-- storage, replica orchestration, and sync behavior
+- replica orchestration beyond the first local TaskChampion sync proof
 
 ## Main Risks In The Recommended Architecture
 
