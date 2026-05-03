@@ -57,10 +57,12 @@ class HttpTaskBackendClient implements TaskBackendClient {
       _uri('/tasks/query'),
       headers: _jsonHeaders,
       body: jsonEncode(<String, dynamic>{
+        'preset': query.preset.apiValue,
         'statuses': query.statuses.map((status) => status.apiValue).toList(),
         'required_tag': query.requiredTag,
         'due_before': query.dueBefore?.toUtc().toIso8601String(),
         'include_waiting': query.includeWaiting,
+        'include_blocked': query.includeBlocked,
         'reference_time': query.referenceTime.toUtc().toIso8601String(),
         'sort': query.sort.apiValue,
       }),

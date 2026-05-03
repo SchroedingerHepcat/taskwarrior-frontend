@@ -5,8 +5,8 @@ use crate::operations::{
     TaskListResponse, TaskResponse,
 };
 use crate::requests::{
-    CreateTaskRequest, TaskQuery, TaskSort, TransitionTaskRequest,
-    UpdateTaskRequest,
+    CreateTaskRequest, TaskQuery, TaskQueryPreset, TaskSort,
+    TransitionTaskRequest, UpdateTaskRequest,
 };
 use crate::service::TaskService;
 use crate::storage::TaskChampionTaskRepository;
@@ -92,10 +92,12 @@ pub struct HttpTransitionTaskRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct HttpTaskQueryRequest {
+    pub preset: Option<String>,
     pub statuses: Option<Vec<String>>,
     pub required_tag: Option<String>,
     pub due_before: Option<String>,
     pub include_waiting: Option<bool>,
+    pub include_blocked: Option<bool>,
     pub reference_time: Option<String>,
     pub sort: Option<String>,
 }
@@ -235,28 +237,53 @@ async fn query_tasks(
     State(state): State<AppState>,
     Json(request): Json<HttpTaskQueryRequest>,
 ) -> Result<Json<TaskListResponse>, ServiceHttpError> {
-    let reference_time = parse_datetime_or_now(request.reference_time)?;
+    let reference_time = parse_datetime_or_now(request.reference_time.clone())?;
     let mut service = state.service.lock().await;
     let tasks = service
-        .query_tasks(&TaskQuery {
-            statuses: request
-                .statuses
-                .unwrap_or_default()
-                .into_iter()
-                .map(|status| parse_status(&status))
-                .collect(),
-            required_tag: request.required_tag,
-            due_before: parse_optional_datetime(request.due_before)?,
-            include_waiting: request.include_waiting.unwrap_or(true),
+        .query_tasks(&build_task_query(
+            request,
             reference_time,
-            sort: parse_sort(request.sort.as_deref()),
-        })
+        )?)
         .await
         .map_err(ServiceHttpError)?;
 
     Ok(Json(TaskListResponse {
         tasks: tasks.into_iter().map(map_task).collect(),
     }))
+}
+
+fn build_task_query(
+    request: HttpTaskQueryRequest,
+    reference_time: DateTime<Utc>,
+) -> Result<TaskQuery, ServiceHttpError> {
+    if parse_query_preset(request.preset.as_deref())
+        == TaskQueryPreset::NextActions
+    {
+        return Ok(TaskQuery::next_actions(reference_time));
+    }
+
+    Ok(TaskQuery {
+        preset: TaskQueryPreset::Custom,
+        statuses: request
+            .statuses
+            .unwrap_or_default()
+            .into_iter()
+            .map(|status| parse_status(&status))
+            .collect(),
+        required_tag: request.required_tag,
+        due_before: parse_optional_datetime(request.due_before)?,
+        include_waiting: request.include_waiting.unwrap_or(true),
+        include_blocked: request.include_blocked.unwrap_or(true),
+        reference_time,
+        sort: parse_sort(request.sort.as_deref()),
+    })
+}
+
+fn parse_query_preset(raw: Option<&str>) -> TaskQueryPreset {
+    match raw.unwrap_or("custom") {
+        "next_actions" => TaskQueryPreset::NextActions,
+        _ => TaskQueryPreset::Custom,
+    }
 }
 
 fn parse_uuid(raw: &str) -> Result<Uuid, ServiceHttpError> {
@@ -440,5 +467,89 @@ mod tests {
             queried["tasks"][0]["project"],
             "frontend"
         );
+    }
+
+    #[tokio::test]
+    async fn http_query_supports_next_actions_preset() {
+        let app = build_router();
+
+        let ready = create_http_task(&app, "Ready action").await;
+        let waiting = create_http_task(&app, "Waiting action").await;
+        let wait_until = "2026-04-12T12:00:00Z";
+
+        let update = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::PATCH)
+                    .uri(format!("/tasks/{waiting}"))
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        json!({"wait": wait_until}).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(update.status(), StatusCode::OK);
+
+        let query = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/tasks/query")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "preset": "next_actions",
+                            "reference_time": "2026-04-12T10:00:00Z",
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(query.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(query.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let queried: Value = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(
+            queried["tasks"].as_array().unwrap().len(),
+            1
+        );
+        assert_eq!(queried["tasks"][0]["id"], ready);
+    }
+
+    async fn create_http_task(
+        app: &axum::Router,
+        description: &str,
+    ) -> String {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        json!({ "description": description }).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let created: Value = serde_json::from_slice(&body).unwrap();
+
+        created["task"]["id"]
+            .as_str()
+            .unwrap()
+            .to_string()
     }
 }

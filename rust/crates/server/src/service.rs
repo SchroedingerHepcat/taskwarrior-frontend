@@ -8,7 +8,8 @@ use crate::sync::{
     PreparedTaskWrite, SyncAttempt, SyncCoordinator, SyncMode, SyncStatus,
 };
 use chrono::{DateTime, Utc};
-use taskwarrior_core::Task;
+use std::collections::BTreeSet;
+use taskwarrior_core::{Task, TaskStatus};
 use uuid::Uuid;
 
 pub struct TaskService<R, S> {
@@ -103,12 +104,13 @@ where
     ) -> Result<Vec<Task>, ServiceError> {
         query.validate()?;
 
-        let mut tasks: Vec<Task> = self
-            .repository
-            .list()
-            .await?
+        let all_tasks = self.repository.list().await?;
+        let completed = completed_task_ids(&all_tasks);
+        let mut tasks: Vec<Task> = all_tasks
             .into_iter()
-            .filter(|task| query.matches(task))
+            .filter(|task| {
+                query.matches_with_completed_dependencies(task, &completed)
+            })
             .collect();
         sort_tasks(
             &mut tasks,
@@ -176,6 +178,14 @@ where
     }
 }
 
+fn completed_task_ids(tasks: &[Task]) -> BTreeSet<uuid::Uuid> {
+    tasks
+        .iter()
+        .filter(|task| task.status == TaskStatus::Completed)
+        .map(|task| task.id)
+        .collect()
+}
+
 fn sort_tasks(
     tasks: &mut [Task],
     sort: TaskSort,
@@ -211,8 +221,8 @@ mod tests {
     use super::TaskService;
     use crate::error::{ServiceError, ValidationError};
     use crate::requests::{
-        CreateTaskRequest, TaskQuery, TaskSort, TransitionTaskRequest,
-        UpdateTaskRequest,
+        AddDependencyRequest, CreateTaskRequest, TaskQuery, TaskQueryPreset,
+        TaskSort, TransitionTaskRequest, UpdateTaskRequest,
     };
     use crate::storage::TaskChampionTaskRepository;
     use crate::sync::{InMemorySyncCoordinator, SyncStatus};
@@ -299,10 +309,12 @@ mod tests {
 
         let queried = service
             .query_tasks(&TaskQuery {
+                preset: TaskQueryPreset::Custom,
                 statuses: vec![TaskStatus::Completed],
                 required_tag: Some("home".to_string()),
                 due_before: Some(timestamp(250)),
                 include_waiting: true,
+                include_blocked: true,
                 reference_time: timestamp(400),
                 sort: TaskSort::DueAsc,
             })
@@ -375,10 +387,12 @@ mod tests {
         let loaded = service.get_task(task_id).await.unwrap();
         let queried = service
             .query_tasks(&TaskQuery {
+                preset: TaskQueryPreset::Custom,
                 statuses: vec![TaskStatus::Pending],
                 required_tag: Some("backend".to_string()),
                 due_before: None,
                 include_waiting: true,
+                include_blocked: true,
                 reference_time: timestamp(200),
                 sort: TaskSort::DescriptionAsc,
             })
@@ -394,6 +408,87 @@ mod tests {
             Some("storage".to_string())
         );
         assert_eq!(queried, vec![loaded]);
+    }
+
+    #[tokio::test]
+    async fn next_actions_query_excludes_waiting_and_blocked_tasks() {
+        let mut service = service();
+        let ready_id = Uuid::from_u128(103);
+        let waiting_id = Uuid::from_u128(104);
+        let blocked_id = Uuid::from_u128(105);
+        let blocker_id = Uuid::from_u128(106);
+
+        for (id, description) in [
+            (ready_id, "Ready next action"),
+            (waiting_id, "Waiting next action"),
+            (blocked_id, "Blocked next action"),
+            (blocker_id, "Blocking task"),
+        ] {
+            service
+                .create_task(CreateTaskRequest {
+                    id,
+                    description: description.to_string(),
+                    created_at: timestamp(100),
+                })
+                .await
+                .unwrap();
+        }
+
+        service
+            .update_task(
+                waiting_id,
+                UpdateTaskRequest {
+                    description: None,
+                    project: None,
+                    clear_project: false,
+                    tags: None,
+                    due: None,
+                    clear_due: false,
+                    wait: Some(timestamp(300)),
+                    clear_wait: false,
+                    add_annotation: None,
+                    modified_at: timestamp(110),
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .add_task_dependency(
+                blocked_id,
+                AddDependencyRequest {
+                    dependency: blocker_id,
+                },
+            )
+            .await
+            .unwrap();
+
+        let next_actions = service
+            .query_tasks(&TaskQuery::next_actions(timestamp(200)))
+            .await
+            .unwrap();
+
+        assert_eq!(next_actions.len(), 2);
+        assert_eq!(next_actions[0].id, blocker_id);
+        assert_eq!(next_actions[1].id, ready_id);
+
+        service
+            .transition_task(
+                blocker_id,
+                TransitionTaskRequest {
+                    status: TaskStatus::Completed,
+                    changed_at: timestamp(250),
+                },
+            )
+            .await
+            .unwrap();
+        let unblocked = service
+            .query_tasks(&TaskQuery::next_actions(timestamp(260)))
+            .await
+            .unwrap();
+
+        assert_eq!(unblocked.len(), 2);
+        assert_eq!(unblocked[0].id, blocked_id);
+        assert_eq!(unblocked[1].id, ready_id);
     }
 
     #[tokio::test]

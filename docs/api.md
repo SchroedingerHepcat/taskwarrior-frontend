@@ -40,17 +40,25 @@ The current product-facing operations cover:
 - task update
 - task status transition
 - task query, filtering, and sorting by product-facing fields
+- GTD-shaped `next_actions` query behavior
 - dashboard and list data backed by the same query surface
 
 The current query shape uses product-level fields rather than raw
 TaskChampion objects or file-oriented Taskwarrior concepts:
 
+- query preset, currently `custom` or `next_actions`
 - statuses
 - required tag
 - due-before cutoff
 - include-waiting flag
+- include-blocked flag based on unresolved dependencies
 - reference time for waiting-state evaluation
 - sort order
+
+The `next_actions` preset is the first GTD-shaped query. It returns pending
+tasks that are not waiting and are not blocked by incomplete dependencies.
+This is a backend semantic boundary; clients request the preset rather than
+reimplementing the dependency and waiting rules.
 
 The current update shape is still intentionally narrow:
 

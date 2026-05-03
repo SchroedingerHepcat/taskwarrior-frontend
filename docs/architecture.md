@@ -302,6 +302,8 @@ code and tests in this repository:
 - basic core status transitions for `end` and `modified`
 - basic dependency mapping between product-facing tasks and TaskChampion data
 - basic product-facing query filtering by status, tag, due, and waiting state
+- a first GTD-shaped `next_actions` query preset that excludes waiting tasks
+  and tasks blocked by incomplete dependencies
 - product-facing sorting by due, modified, and description at the server
   boundary
 - an HTTP backend path for create, get, update, transition, and query
@@ -329,7 +331,8 @@ The following areas are still open and should not be treated as proven yet:
 - recurring task semantics beyond preserving the `recurring` status value
 - scheduled and waiting lifecycle rules beyond timestamp mapping and query
   filtering
-- dependency semantics beyond basic `dep_*` mapping and storage shape
+- dependency semantics beyond basic `dep_*` mapping, storage shape, and
+  unresolved-dependency filtering for `next_actions`
 - production deployment of durable TaskChampion storage, including migration,
   backup, and operational checks
 - sync conflict behavior, retry behavior, and user-facing sync state
@@ -337,6 +340,7 @@ The following areas are still open and should not be treated as proven yet:
   sync server
 - whether additional protocols are needed beyond the current HTTP boundary
 - task completion and deletion side effects beyond basic `end` timestamping
+  and `next_actions` dependency unblocking
 - replica orchestration beyond the first local TaskChampion sync proof
 
 ## Main Risks In The Recommended Architecture

@@ -244,12 +244,12 @@ board views, and advanced filtering.
 - Complex recurrence schedules expected by Taskwarrior are still unproven.
 - Scheduled and waiting lifecycle rules remain open beyond timestamp mapping
   and basic waiting-state query filtering.
-- Dependency semantics remain open beyond basic `dep_*` mapping and storage
-  shape.
-- GTD workflows are still a product goal, not yet a proven model or query
-  layer.
+- Dependency semantics remain open beyond basic `dep_*` mapping, storage
+  shape, and unresolved-dependency filtering for actionable queries.
+- GTD workflows now have a first `next_actions` query proof, but inbox,
+  review, contexts, and saved GTD views remain open.
 - Advanced filtering and saved-query semantics are still open beyond the first
-  product-facing query boundary proven in Milestone 1.
+  product-facing query boundaries proven so far.
 - Board behavior is still unproven as a semantic operation model. Drag and
   drop must still be shown to produce valid task updates without inventing
   client-side semantics.
@@ -269,6 +269,9 @@ board views, and advanced filtering.
 - Basic server CRUD now goes through TaskChampion storage. This milestone
   still needs to prove richer TaskChampion semantic behavior for recurrence,
   scheduling, completion side effects, and dependency evaluation.
+- The first actionable GTD query is now backend-owned: `next_actions` returns
+  pending tasks that are not waiting and are not blocked by incomplete
+  dependencies. It is not a full GTD workflow yet.
 
 ## Milestone 6: Self-Hosted Deployment
 

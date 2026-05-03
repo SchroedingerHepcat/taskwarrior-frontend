@@ -57,6 +57,15 @@ enum TaskSort {
   final String apiValue;
 }
 
+enum TaskQueryPreset {
+  custom('custom'),
+  nextActions('next_actions');
+
+  const TaskQueryPreset(this.apiValue);
+
+  final String apiValue;
+}
+
 enum TaskListMode {
   all('All'),
   ready('Ready'),
@@ -110,18 +119,22 @@ class TaskAnnotation {
 
 class TaskQuery {
   const TaskQuery({
+    required this.preset,
     required this.statuses,
     required this.requiredTag,
     required this.dueBefore,
     required this.includeWaiting,
+    required this.includeBlocked,
     required this.referenceTime,
     required this.sort,
   });
 
+  final TaskQueryPreset preset;
   final List<TaskStatus> statuses;
   final String? requiredTag;
   final DateTime? dueBefore;
   final bool includeWaiting;
+  final bool includeBlocked;
   final DateTime referenceTime;
   final TaskSort sort;
 
@@ -129,10 +142,12 @@ class TaskQuery {
     required DateTime referenceTime,
   }) {
     return TaskQuery(
+      preset: TaskQueryPreset.custom,
       statuses: const <TaskStatus>[],
       requiredTag: null,
       dueBefore: null,
       includeWaiting: true,
+      includeBlocked: true,
       referenceTime: referenceTime,
       sort: TaskSort.dueAsc,
     );
@@ -145,22 +160,17 @@ class TaskQuery {
     switch (mode) {
       case TaskListMode.completed:
         return TaskQuery(
+          preset: TaskQueryPreset.custom,
           statuses: const <TaskStatus>[TaskStatus.completed],
           requiredTag: null,
           dueBefore: null,
           includeWaiting: true,
+          includeBlocked: true,
           referenceTime: referenceTime,
           sort: TaskSort.modifiedDesc,
         );
       case TaskListMode.ready:
-        return TaskQuery(
-          statuses: const <TaskStatus>[TaskStatus.pending],
-          requiredTag: null,
-          dueBefore: null,
-          includeWaiting: false,
-          referenceTime: referenceTime,
-          sort: TaskSort.dueAsc,
-        );
+        return TaskQuery.nextActions(referenceTime: referenceTime);
       case TaskListMode.all:
         return TaskQuery.all(referenceTime: referenceTime);
     }
@@ -172,33 +182,45 @@ class TaskQuery {
   }) {
     switch (widget) {
       case DashboardWidgetType.readyNow:
-        return TaskQuery(
-          statuses: const <TaskStatus>[TaskStatus.pending],
-          requiredTag: null,
-          dueBefore: null,
-          includeWaiting: false,
-          referenceTime: referenceTime,
-          sort: TaskSort.dueAsc,
-        );
+        return TaskQuery.nextActions(referenceTime: referenceTime);
       case DashboardWidgetType.dueSoon:
         return TaskQuery(
+          preset: TaskQueryPreset.custom,
           statuses: const <TaskStatus>[TaskStatus.pending],
           requiredTag: null,
           dueBefore: referenceTime.add(const Duration(days: 7)),
           includeWaiting: false,
+          includeBlocked: false,
           referenceTime: referenceTime,
           sort: TaskSort.dueAsc,
         );
       case DashboardWidgetType.completedRecently:
         return TaskQuery(
+          preset: TaskQueryPreset.custom,
           statuses: const <TaskStatus>[TaskStatus.completed],
           requiredTag: null,
           dueBefore: null,
           includeWaiting: true,
+          includeBlocked: true,
           referenceTime: referenceTime,
           sort: TaskSort.modifiedDesc,
         );
     }
+  }
+
+  factory TaskQuery.nextActions({
+    required DateTime referenceTime,
+  }) {
+    return TaskQuery(
+      preset: TaskQueryPreset.nextActions,
+      statuses: const <TaskStatus>[TaskStatus.pending],
+      requiredTag: null,
+      dueBefore: null,
+      includeWaiting: false,
+      includeBlocked: false,
+      referenceTime: referenceTime,
+      sort: TaskSort.dueAsc,
+    );
   }
 
   bool matches(TaskItem task) {

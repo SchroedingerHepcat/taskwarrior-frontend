@@ -29,5 +29,6 @@ external TaskChampion sync server remains an explicit proof gap.
 The Flutter app currently includes responsive dashboard, list, board, and
 detail screens backed by that HTTP API. It now proves end-to-end create,
 update, complete, and filtered list flows against the Rust backend, while
-later milestones still own recurrence, advanced filtering, deployment, and
-sync.
+the backend owns the first GTD-shaped `next_actions` query for ready work.
+Later milestones still own recurrence, broader advanced filtering,
+deployment, and sync.

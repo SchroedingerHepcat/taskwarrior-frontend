@@ -11,6 +11,12 @@ pub enum TaskSort {
     DescriptionAsc,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TaskQueryPreset {
+    Custom,
+    NextActions,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateTaskRequest {
     pub id: Uuid,
@@ -167,10 +173,12 @@ impl AddDependencyRequest {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TaskQuery {
+    pub preset: TaskQueryPreset,
     pub statuses: Vec<TaskStatus>,
     pub required_tag: Option<String>,
     pub due_before: Option<DateTime<Utc>>,
     pub include_waiting: bool,
+    pub include_blocked: bool,
     pub reference_time: DateTime<Utc>,
     pub sort: TaskSort,
 }
@@ -178,10 +186,25 @@ pub struct TaskQuery {
 impl TaskQuery {
     pub fn all(reference_time: DateTime<Utc>) -> Self {
         Self {
+            preset: TaskQueryPreset::Custom,
             statuses: Vec::new(),
             required_tag: None,
             due_before: None,
             include_waiting: true,
+            include_blocked: true,
+            reference_time,
+            sort: TaskSort::DueAsc,
+        }
+    }
+
+    pub fn next_actions(reference_time: DateTime<Utc>) -> Self {
+        Self {
+            preset: TaskQueryPreset::NextActions,
+            statuses: vec![TaskStatus::Pending],
+            required_tag: None,
+            due_before: None,
+            include_waiting: false,
+            include_blocked: false,
             reference_time,
             sort: TaskSort::DueAsc,
         }
@@ -222,6 +245,19 @@ impl TaskQuery {
             && (self.include_waiting
                 || !task.is_waiting_at(self.reference_time))
     }
+
+    pub fn matches_with_completed_dependencies(
+        &self,
+        task: &Task,
+        completed: &BTreeSet<Uuid>,
+    ) -> bool {
+        self.matches(task)
+            && (self.include_blocked
+                || task
+                    .dependencies
+                    .iter()
+                    .all(|dependency| completed.contains(dependency)))
+    }
 }
 
 fn normalized_tags(tags: &[String]) -> BTreeSet<String> {
@@ -233,11 +269,12 @@ fn normalized_tags(tags: &[String]) -> BTreeSet<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        AddDependencyRequest, CreateTaskRequest, TaskQuery, TaskSort,
-        TransitionTaskRequest, UpdateTaskRequest,
+        AddDependencyRequest, CreateTaskRequest, TaskQuery, TaskQueryPreset,
+        TaskSort, TransitionTaskRequest, UpdateTaskRequest,
     };
     use crate::ValidationError;
     use chrono::{TimeZone, Utc};
+    use std::collections::BTreeSet;
     use taskwarrior_core::{Task, TaskStatus};
     use uuid::Uuid;
 
@@ -347,10 +384,12 @@ mod tests {
         task.wait = Some(timestamp(150));
 
         let query = TaskQuery {
+            preset: TaskQueryPreset::Custom,
             statuses: vec![TaskStatus::Pending],
             required_tag: Some("home".to_string()),
             due_before: Some(timestamp(120)),
             include_waiting: false,
+            include_blocked: true,
             reference_time: timestamp(140),
             sort: TaskSort::DueAsc,
         };
@@ -363,5 +402,27 @@ mod tests {
         };
 
         assert!(visible_query.matches(&task));
+    }
+
+    #[test]
+    fn next_actions_exclude_waiting_and_blocked_tasks() {
+        let dependency = Uuid::from_u128(41);
+        let mut task = Task::new(Uuid::from_u128(42), "next");
+        task.wait = Some(timestamp(200));
+        task.add_dependency(dependency);
+        let query = TaskQuery::next_actions(timestamp(100));
+
+        assert!(!query
+            .matches_with_completed_dependencies(&task, &BTreeSet::new(),));
+
+        task.wait = None;
+        assert!(!query
+            .matches_with_completed_dependencies(&task, &BTreeSet::new(),));
+        assert!(
+            query.matches_with_completed_dependencies(
+                &task,
+                &BTreeSet::from([dependency]),
+            )
+        );
     }
 }

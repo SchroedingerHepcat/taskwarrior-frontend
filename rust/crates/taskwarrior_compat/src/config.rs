@@ -3,8 +3,9 @@ use std::path::PathBuf;
 use taskchampion::storage::AccessMode;
 use taskchampion::{ServerConfig, Uuid};
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum TaskChampionStorageConfig {
+    #[default]
     InMemory,
     Sqlite {
         path: PathBuf,
@@ -12,23 +13,12 @@ pub enum TaskChampionStorageConfig {
     },
 }
 
-impl Default for TaskChampionStorageConfig {
-    fn default() -> Self {
-        Self::InMemory
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum TaskChampionSyncConfig {
+    #[default]
     Disabled,
     Local(TaskChampionLocalSyncConfig),
     Remote(TaskChampionRemoteSyncConfig),
-}
-
-impl Default for TaskChampionSyncConfig {
-    fn default() -> Self {
-        Self::Disabled
-    }
 }
 
 impl TaskChampionSyncConfig {

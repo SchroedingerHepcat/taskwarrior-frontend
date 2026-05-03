@@ -62,6 +62,18 @@ void main() {
     expect(backend.queryCalls, greaterThanOrEqualTo(3));
     expect(find.text('Local development adapter ready'), findsOneWidget);
   });
+
+  test('ready list mode uses backend next-actions query preset', () {
+    final query = TaskQuery.forListMode(
+      mode: TaskListMode.ready,
+      referenceTime: DateTime.utc(2026, 4, 12),
+    );
+
+    expect(query.preset, TaskQueryPreset.nextActions);
+    expect(query.statuses, const <TaskStatus>[TaskStatus.pending]);
+    expect(query.includeWaiting, isFalse);
+    expect(query.includeBlocked, isFalse);
+  });
 }
 
 class _FakeBackendClient implements TaskBackendClient {
