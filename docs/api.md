@@ -15,6 +15,12 @@ HTTP API remains product-facing, while server CRUD handlers now route through
 a TaskChampion-backed repository rather than an independent authoritative task
 database.
 
+The public HTTP API is not the TaskChampion sync protocol. The backend should
+act as a TaskChampion replica and may synchronize with a separately hosted
+TaskChampion sync server. Flutter and other frontend clients should continue
+to use this project's HTTP API rather than talking to that sync server
+directly.
+
 ## Current HTTP API
 
 The current HTTP surface covers:
@@ -71,6 +77,8 @@ The server crate now separates:
 - sync orchestration behind a `SyncCoordinator` trait
 - future durable TaskChampion storage configuration behind Rust service
   boundaries
+- future external TaskChampion sync server configuration behind Rust service
+  boundaries
 
 This is sufficient for Milestone 4 because it proves the backend can expose a
 real wire-level path while keeping compatibility and sync concerns behind Rust
@@ -87,6 +95,8 @@ service boundaries.
 - The backend should not expose raw TaskChampion storage or replica objects.
 - The backend should route task CRUD through Taskwarrior or TaskChampion as the
   storage and mutation authority.
+- The backend may sync its TaskChampion replica with an external TaskChampion
+  sync server, but that server is not exposed as the frontend API.
 - The compatibility layer may reuse TaskChampion semantics internally where
   that behavior is already authoritative.
 - External systems such as issue trackers, voice interfaces, and AI tools
@@ -96,6 +106,7 @@ service boundaries.
 ## Open questions
 
 - sync model
+- external TaskChampion sync server configuration and credentials
 - durable TaskChampion storage configuration
 - authentication model
 - offline write reconciliation

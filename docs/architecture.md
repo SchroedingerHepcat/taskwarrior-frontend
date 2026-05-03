@@ -66,6 +66,13 @@ concepts. A Rust backend exposes an API used by Android, Linux desktop, and
 web clients, and it performs task CRUD through Taskwarrior or TaskChampion.
 Clients do not manipulate Taskwarrior data files directly.
 
+For multi-device synchronization, the backend should act as a TaskChampion
+replica client. It should be configurable to synchronize with a separate
+self-hosted TaskChampion sync server, such as the upstream
+`ghcr.io/gothenburgbitfactory/taskchampion-sync-server` container. This project
+provides the frontend and product API for that data; it should not replace the
+TaskChampion sync server role.
+
 ### Strengths
 
 - Matches the repository rules directly.
@@ -74,6 +81,9 @@ Clients do not manipulate Taskwarrior data files directly.
 - Fits self-hosting well because the backend can own storage access, sync
   orchestration, and policy while Taskwarrior or TaskChampion remain the task
   storage authority.
+- Fits deployments where a user already runs a TaskChampion sync server,
+  because this backend can become another TaskChampion replica rather than a
+  replacement sync service.
 - Makes Android and web support realistic because clients can stay thin.
 - Preserves a path to strong compatibility without forcing the UI layer to
   understand Taskwarrior internals.
@@ -195,6 +205,16 @@ custom task store. Product-facing server operations should translate into
 Taskwarrior-compatible mutations, then read back through the same compatibility
 boundary.
 
+The intended sync topology is:
+
+- Flutter clients call this project's backend HTTP API.
+- This project's backend owns filtering, dashboard, board, and validation
+  behavior for the UI.
+- The backend stores tasks as a TaskChampion replica.
+- The backend may synchronize that replica with an external TaskChampion sync
+  server.
+- The external TaskChampion sync server remains the sync coordination service.
+
 The intended layer responsibilities are:
 
 - `taskwarrior_core`
@@ -208,6 +228,8 @@ The intended layer responsibilities are:
   Owns backend-facing API operations and should expose GUI-friendly operations.
   It should route task CRUD through Taskwarrior or TaskChampion via the
   compatibility layer, not expose raw TaskChampion storage or replica objects.
+  It should also own configuration for connecting its TaskChampion replica to
+  an external TaskChampion sync server.
 - `flutter_app`
   Owns presentation and user interaction only. It must not implement
   Taskwarrior semantics itself.
@@ -227,6 +249,9 @@ The intended layer responsibilities are:
 - Direct synchronization of Taskwarrior data files remains a rejected
   architecture. TaskChampion-backed storage is used through Rust APIs and
   controlled backend operations, not through client-visible file sharing.
+- A separate TaskChampion sync server is compatible with the architecture and
+  is the preferred external sync coordination service for first-party task
+  data. This project should integrate with it rather than replace it.
 - The project still needs a product-facing task model and API shape, because
   dashboards, boards, filters, and future integrations should not be forced to
   couple directly to low-level TaskChampion object shapes.
@@ -252,6 +277,10 @@ evidence:
    The backend must prove concrete Taskwarrior or TaskChampion-backed storage
    and synchronization through Rust APIs, without external file sync or an
    independent custom task store.
+6. External sync-server proof
+   The backend must prove that its TaskChampion replica can synchronize with a
+   separately hosted TaskChampion sync server without exposing that sync
+   protocol to Flutter clients.
 
 ## Current TaskChampion Proof Status
 
@@ -286,6 +315,8 @@ code and tests in this repository:
   product-facing client operations rather than Taskwarrior storage concepts
 - full end-to-end create, update, complete, and query flows from Flutter to the
   Rust backend over HTTP
+- an architectural decision to support an external TaskChampion sync server as
+  the first-party task sync coordinator
 
 The following areas are still open and should not be treated as proven yet:
 
@@ -296,6 +327,8 @@ The following areas are still open and should not be treated as proven yet:
 - durable persistence and real multi-client sync behavior
 - durable TaskChampion storage configuration beyond the current in-memory
   TaskChampion storage backend
+- configuration and tests for syncing the backend replica with an external
+  TaskChampion sync server
 - whether additional protocols are needed beyond the current HTTP boundary
 - task completion and deletion side effects beyond basic `end` timestamping
 - storage, replica orchestration, and sync behavior

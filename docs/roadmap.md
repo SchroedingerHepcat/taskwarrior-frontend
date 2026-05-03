@@ -9,6 +9,10 @@
   mutation authority.
 - Server CRUD operations should call into Taskwarrior or TaskChampion through
   Rust boundaries rather than write to an independent task database.
+- The backend should be able to synchronize its TaskChampion replica with a
+  separately hosted TaskChampion sync server.
+- This project should provide a frontend and product API for TaskChampion data,
+  not replace the upstream TaskChampion sync server.
 - Flutter remains the shared client for Android, Linux desktop, and web.
 - This roadmap is ordered to prove architecture and semantics before heavy UI
   or deployment work.
@@ -279,7 +283,11 @@ deployment and basic operational controls.
 - Containerized local and self-hosted deployment path.
 - Configuration for storage, networking, and client base URLs.
 - Taskwarrior or TaskChampion-backed storage configuration for the backend.
+- Configuration for connecting the backend TaskChampion replica to an external
+  TaskChampion sync server.
 - Deployment documentation for a single-node self-hosted setup.
+- Deployment documentation for pairing this backend with a separately hosted
+  TaskChampion sync server.
 - Basic operational checks, logs, and health endpoints.
 
 ### Acceptance Criteria
@@ -291,6 +299,8 @@ deployment and basic operational controls.
 - The deployment path does not rely on external file synchronization.
 - The deployment path uses Taskwarrior or TaskChampion as the task storage
   authority through backend-controlled Rust APIs.
+- A self-hosted user can configure the backend to sync with an external
+  TaskChampion sync server without exposing TaskChampion internals to Flutter.
 - CI validates the deployment artifacts at least to the level of build and
   configuration sanity.
 
@@ -308,6 +318,8 @@ deployment and basic operational controls.
 - Durable TaskChampion-backed storage, migration, backup, and deployment-safe
   configuration are still open carryover from the current in-memory
   TaskChampion storage backend.
+- External TaskChampion sync server URL, credentials, TLS expectations, and
+  failure behavior still need concrete configuration decisions.
 
 ## Milestone 7: Sync, Error, And Conflict UX
 
@@ -319,6 +331,7 @@ clients, especially once multiple devices are in use.
 ### Deliverables
 
 - Sync state model and user-visible status indicators.
+- Backend synchronization with an external TaskChampion sync server.
 - Error handling for network failures, invalid updates, and server rejections.
 - Conflict detection and conflict resolution UX.
 - Offline and reconnection behavior definitions for clients where supported.
@@ -331,6 +344,8 @@ clients, especially once multiple devices are in use.
 - Conflicts are handled by defined product behavior rather than accidental
   last-write-wins semantics.
 - Backend and client tests cover representative conflict and retry scenarios.
+- Tests prove backend sync behavior against an external or test TaskChampion
+  sync server.
 - The sync architecture still leaves room for future external-source adapters.
 
 ### Risks
@@ -343,6 +358,8 @@ clients, especially once multiple devices are in use.
 ### Notes For This Milestone
 
 - Sync orchestration remains open beyond the current internal coordinator seam.
+- Compatibility with a separately hosted TaskChampion sync server remains open
+  until tested against that server or an equivalent test service.
 - Offline write reconciliation remains open.
 - A durable error model from the API boundary will likely need to solidify here
   if it has not already been finalized earlier.
