@@ -1,40 +1,60 @@
-use std::collections::BTreeMap;
+use taskwarrior_compat::{CompatibilityError, TaskChampionTaskStore};
 use taskwarrior_core::Task;
 use uuid::Uuid;
 
+#[allow(async_fn_in_trait)]
 pub trait TaskRepository {
-    fn get(
-        &self,
+    async fn get(
+        &mut self,
         id: Uuid,
-    ) -> Option<Task>;
-    fn list(&self) -> Vec<Task>;
-    fn upsert(
+    ) -> Result<Option<Task>, CompatibilityError>;
+
+    async fn list(&mut self) -> Result<Vec<Task>, CompatibilityError>;
+
+    async fn upsert(
         &mut self,
         task: Task,
-    );
+    ) -> Result<StoredTask, CompatibilityError>;
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StoredTask {
+    pub task: Task,
+    pub operation_count: usize,
 }
 
 #[derive(Default)]
-pub struct InMemoryTaskRepository {
-    tasks: BTreeMap<Uuid, Task>,
+pub struct TaskChampionTaskRepository {
+    store: TaskChampionTaskStore,
 }
 
-impl TaskRepository for InMemoryTaskRepository {
-    fn get(
-        &self,
+impl TaskChampionTaskRepository {
+    pub fn new(store: TaskChampionTaskStore) -> Self {
+        Self { store }
+    }
+}
+
+impl TaskRepository for TaskChampionTaskRepository {
+    async fn get(
+        &mut self,
         id: Uuid,
-    ) -> Option<Task> {
-        self.tasks.get(&id).cloned()
+    ) -> Result<Option<Task>, CompatibilityError> {
+        self.store.get_task(id).await
     }
 
-    fn list(&self) -> Vec<Task> {
-        self.tasks.values().cloned().collect()
+    async fn list(&mut self) -> Result<Vec<Task>, CompatibilityError> {
+        self.store.list_tasks().await
     }
 
-    fn upsert(
+    async fn upsert(
         &mut self,
         task: Task,
-    ) {
-        self.tasks.insert(task.id, task);
+    ) -> Result<StoredTask, CompatibilityError> {
+        let write = self.store.upsert_task(&task).await?;
+
+        Ok(StoredTask {
+            task: write.task,
+            operation_count: write.operation_count,
+        })
     }
 }

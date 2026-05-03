@@ -11,9 +11,9 @@ without exposing TaskChampion storage details or claiming that transport,
 authentication, pagination, or sync behavior are settled.
 
 The intended storage direction is Taskwarrior 3 and TaskChampion directly. The
-HTTP API should remain product-facing, but server CRUD handlers should
-eventually perform task mutations through Taskwarrior or TaskChampion rather
-than through an independent authoritative task database.
+HTTP API remains product-facing, while server CRUD handlers now route through
+a TaskChampion-backed repository rather than an independent authoritative task
+database.
 
 ## Current HTTP API
 
@@ -67,10 +67,9 @@ The server crate now separates:
 - request validation and product-facing request types
 - HTTP handlers and endpoint specification
 - task service logic for create, update, transition, dependency, and query
-- repository storage behind a `TaskRepository` trait
-- compatibility write preparation behind a `CompatibilityGateway` trait
+- TaskChampion-backed repository storage behind a `TaskRepository` trait
 - sync orchestration behind a `SyncCoordinator` trait
-- future Taskwarrior or TaskChampion-backed storage behind Rust service
+- future durable TaskChampion storage configuration behind Rust service
   boundaries
 
 This is sufficient for Milestone 4 because it proves the backend can expose a
@@ -97,7 +96,7 @@ service boundaries.
 ## Open questions
 
 - sync model
-- Taskwarrior or TaskChampion-backed storage implementation
+- durable TaskChampion storage configuration
 - authentication model
 - offline write reconciliation
 - pagination and list result shape

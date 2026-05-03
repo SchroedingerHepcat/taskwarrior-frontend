@@ -7,6 +7,8 @@
 mod codec;
 mod error;
 mod properties;
+mod store;
 
 pub use codec::{decode_task, encode_task, EncodedTask};
 pub use error::CompatibilityError;
+pub use store::{TaskChampionTaskStore, TaskChampionWrite};

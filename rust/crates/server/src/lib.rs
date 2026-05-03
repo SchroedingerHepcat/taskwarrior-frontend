@@ -19,8 +19,5 @@ pub use requests::{
     TransitionTaskRequest, UpdateTaskRequest,
 };
 pub use service::TaskService;
-pub use storage::{InMemoryTaskRepository, TaskRepository};
-pub use sync::{
-    CompatibilityGateway, InMemorySyncCoordinator, PreparedTaskWrite,
-    SyncCoordinator, TaskwarriorCompatibilityGateway,
-};
+pub use storage::{StoredTask, TaskChampionTaskRepository, TaskRepository};
+pub use sync::{InMemorySyncCoordinator, PreparedTaskWrite, SyncCoordinator};

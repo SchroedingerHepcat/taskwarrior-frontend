@@ -279,8 +279,9 @@ code and tests in this repository:
   operations
 - request validation at the backend boundary for descriptions, project input,
   tags, annotations, status input, dependency shape, and query shape
-- internal server boundaries for repository storage, compatibility write
-  preparation, and sync coordination
+- internal server boundaries for TaskChampion-backed repository storage and
+  sync coordination
+- server CRUD backed by a TaskChampion `Replica` using TaskChampion storage
 - a Flutter shell boundary that routes user navigation and screen state through
   product-facing client operations rather than Taskwarrior storage concepts
 - full end-to-end create, update, complete, and query flows from Flutter to the
@@ -293,7 +294,8 @@ The following areas are still open and should not be treated as proven yet:
   filtering
 - dependency semantics beyond basic `dep_*` mapping and storage shape
 - durable persistence and real multi-client sync behavior
-- server CRUD backed directly by Taskwarrior or TaskChampion storage
+- durable TaskChampion storage configuration beyond the current in-memory
+  TaskChampion storage backend
 - whether additional protocols are needed beyond the current HTTP boundary
 - task completion and deletion side effects beyond basic `end` timestamping
 - storage, replica orchestration, and sync behavior

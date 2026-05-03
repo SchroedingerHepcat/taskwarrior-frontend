@@ -189,9 +189,10 @@ creation, editing, completion, and querying.
 - The current HTTP surface does not yet expose every internal service
   operation, including dependency mutation, because this milestone only needed
   the first end-to-end CRUD and query path.
-- The current implementation still uses in-memory storage for the first HTTP
-  path. Future storage work should replace that with Taskwarrior or
-  TaskChampion-backed CRUD rather than a custom authoritative database.
+- The current implementation now routes server CRUD through a TaskChampion
+  `Replica` using TaskChampion's in-memory storage backend. Future deployment
+  work should replace that with durable TaskChampion configuration rather than
+  a custom authoritative database.
 
 ## Milestone 5: Taskwarrior Semantics, GTD, And Advanced Views
 
@@ -261,6 +262,9 @@ board views, and advanced filtering.
 - This milestone should start replacing product-layer CRUD assumptions with
   Taskwarrior or TaskChampion-backed mutations for semantic cases such as
   recurrence, scheduling, completion, and dependency behavior.
+- Basic server CRUD now goes through TaskChampion storage. This milestone
+  still needs to prove richer TaskChampion semantic behavior for recurrence,
+  scheduling, completion side effects, and dependency evaluation.
 
 ## Milestone 6: Self-Hosted Deployment
 
@@ -301,9 +305,9 @@ deployment and basic operational controls.
 ### Notes For This Milestone
 
 - Authentication and authorization are still open carryover from Milestone 2.
-- Durable Taskwarrior or TaskChampion-backed storage, migration, backup, and
-  deployment-safe configuration are still open carryover from the current
-  in-memory service scaffold.
+- Durable TaskChampion-backed storage, migration, backup, and deployment-safe
+  configuration are still open carryover from the current in-memory
+  TaskChampion storage backend.
 
 ## Milestone 7: Sync, Error, And Conflict UX
 

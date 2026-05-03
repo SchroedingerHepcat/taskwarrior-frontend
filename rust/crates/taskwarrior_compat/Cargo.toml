@@ -8,5 +8,8 @@ license.workspace = true
 taskwarrior_core = { path = "../taskwarrior_core" }
 taskchampion = { version = "3.0.1", default-features = false }
 
+[dev-dependencies]
+tokio = { version = "1.48.0", features = ["macros", "rt-multi-thread"] }
+
 [lib]
 path = "src/lib.rs"

@@ -4,6 +4,7 @@ use std::fmt::{Display, Formatter};
 #[derive(Debug, Eq, PartialEq)]
 pub enum CompatibilityError {
     InvalidTimestamp { property: String, value: String },
+    TaskChampionStorage(String),
 }
 
 impl Display for CompatibilityError {
@@ -16,6 +17,12 @@ impl Display for CompatibilityError {
                 write!(
                     f,
                     "invalid timestamp for {property}: {value}"
+                )
+            }
+            Self::TaskChampionStorage(message) => {
+                write!(
+                    f,
+                    "taskchampion storage error: {message}"
                 )
             }
         }

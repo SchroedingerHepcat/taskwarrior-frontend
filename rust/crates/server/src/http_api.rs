@@ -8,8 +8,8 @@ use crate::requests::{
     UpdateTaskRequest,
 };
 use crate::service::TaskService;
-use crate::storage::InMemoryTaskRepository;
-use crate::sync::{InMemorySyncCoordinator, TaskwarriorCompatibilityGateway};
+use crate::storage::TaskChampionTaskRepository;
+use crate::sync::InMemorySyncCoordinator;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -24,11 +24,8 @@ use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
 use uuid::Uuid;
 
-type AppService = TaskService<
-    InMemoryTaskRepository,
-    TaskwarriorCompatibilityGateway,
-    InMemorySyncCoordinator,
->;
+type AppService =
+    TaskService<TaskChampionTaskRepository, InMemorySyncCoordinator>;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -39,8 +36,7 @@ impl Default for AppState {
     fn default() -> Self {
         Self {
             service: Arc::new(Mutex::new(TaskService::new(
-                InMemoryTaskRepository::default(),
-                TaskwarriorCompatibilityGateway,
+                TaskChampionTaskRepository::default(),
                 InMemorySyncCoordinator::default(),
             ))),
         }
@@ -137,6 +133,7 @@ async fn create_task(
             description: request.description,
             created_at: Utc::now(),
         })
+        .await
         .map_err(ServiceHttpError)?;
 
     Ok(Json(TaskResponse {
@@ -149,9 +146,10 @@ async fn get_task(
     Path(task_id): Path<String>,
 ) -> Result<Json<TaskResponse>, ServiceHttpError> {
     let task_id = parse_uuid(&task_id)?;
-    let service = state.service.lock().await;
+    let mut service = state.service.lock().await;
     let task = service
         .get_task(task_id)
+        .await
         .map_err(ServiceHttpError)?;
 
     Ok(Json(TaskResponse {
@@ -180,6 +178,7 @@ async fn update_task(
     let mut service = state.service.lock().await;
     let task = service
         .update_task(task_id, request)
+        .await
         .map_err(ServiceHttpError)?;
 
     Ok(Json(TaskResponse {
@@ -202,6 +201,7 @@ async fn transition_task(
                 changed_at: parse_datetime_or_now(request.changed_at)?,
             },
         )
+        .await
         .map_err(ServiceHttpError)?;
 
     Ok(Json(TaskResponse {
@@ -214,7 +214,7 @@ async fn query_tasks(
     Json(request): Json<HttpTaskQueryRequest>,
 ) -> Result<Json<TaskListResponse>, ServiceHttpError> {
     let reference_time = parse_datetime_or_now(request.reference_time)?;
-    let service = state.service.lock().await;
+    let mut service = state.service.lock().await;
     let tasks = service
         .query_tasks(&TaskQuery {
             statuses: request
@@ -229,6 +229,7 @@ async fn query_tasks(
             reference_time,
             sort: parse_sort(request.sort.as_deref()),
         })
+        .await
         .map_err(ServiceHttpError)?;
 
     Ok(Json(TaskListResponse {

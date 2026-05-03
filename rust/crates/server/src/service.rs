@@ -4,28 +4,22 @@ use crate::requests::{
     TransitionTaskRequest, UpdateTaskRequest,
 };
 use crate::storage::TaskRepository;
-use crate::sync::{CompatibilityGateway, SyncCoordinator};
+use crate::sync::{PreparedTaskWrite, SyncCoordinator};
 use chrono::{DateTime, Utc};
 use taskwarrior_core::Task;
 use uuid::Uuid;
 
-pub struct TaskService<R, C, S> {
+pub struct TaskService<R, S> {
     repository: R,
-    compatibility: C,
     sync: S,
 }
 
-impl<R, C, S> TaskService<R, C, S> {
+impl<R, S> TaskService<R, S> {
     pub fn new(
         repository: R,
-        compatibility: C,
         sync: S,
     ) -> Self {
-        Self {
-            repository,
-            compatibility,
-            sync,
-        }
+        Self { repository, sync }
     }
 
     pub fn repository(&self) -> &R {
@@ -37,13 +31,12 @@ impl<R, C, S> TaskService<R, C, S> {
     }
 }
 
-impl<R, C, S> TaskService<R, C, S>
+impl<R, S> TaskService<R, S>
 where
     R: TaskRepository,
-    C: CompatibilityGateway,
     S: SyncCoordinator,
 {
-    pub fn create_task(
+    pub async fn create_task(
         &mut self,
         request: CreateTaskRequest,
     ) -> Result<Task, ServiceError> {
@@ -53,57 +46,57 @@ where
         task.entry = Some(request.created_at);
         task.modified = Some(request.created_at);
 
-        self.persist(task)
+        self.persist(task).await
     }
 
-    pub fn get_task(
-        &self,
+    pub async fn get_task(
+        &mut self,
         task_id: Uuid,
     ) -> Result<Task, ServiceError> {
-        self.load(task_id)
+        self.load(task_id).await
     }
 
-    pub fn update_task(
+    pub async fn update_task(
         &mut self,
         task_id: Uuid,
         request: UpdateTaskRequest,
     ) -> Result<Task, ServiceError> {
         request.validate()?;
 
-        let mut task = self.load(task_id)?;
+        let mut task = self.load(task_id).await?;
         request.apply_to(&mut task);
 
-        self.persist(task)
+        self.persist(task).await
     }
 
-    pub fn transition_task(
+    pub async fn transition_task(
         &mut self,
         task_id: Uuid,
         request: TransitionTaskRequest,
     ) -> Result<Task, ServiceError> {
         request.validate()?;
 
-        let mut task = self.load(task_id)?;
+        let mut task = self.load(task_id).await?;
         task.transition_status(request.status, request.changed_at);
 
-        self.persist(task)
+        self.persist(task).await
     }
 
-    pub fn add_task_dependency(
+    pub async fn add_task_dependency(
         &mut self,
         task_id: Uuid,
         request: AddDependencyRequest,
     ) -> Result<Task, ServiceError> {
         request.validate_for_task(task_id)?;
 
-        let mut task = self.load(task_id)?;
+        let mut task = self.load(task_id).await?;
         task.add_dependency(request.dependency);
 
-        self.persist(task)
+        self.persist(task).await
     }
 
-    pub fn query_tasks(
-        &self,
+    pub async fn query_tasks(
+        &mut self,
         query: &TaskQuery,
     ) -> Result<Vec<Task>, ServiceError> {
         query.validate()?;
@@ -111,6 +104,7 @@ where
         let mut tasks: Vec<Task> = self
             .repository
             .list()
+            .await?
             .into_iter()
             .filter(|task| query.matches(task))
             .collect();
@@ -123,27 +117,29 @@ where
         Ok(tasks)
     }
 
-    fn load(
-        &self,
+    async fn load(
+        &mut self,
         task_id: Uuid,
     ) -> Result<Task, ServiceError> {
         self.repository
             .get(task_id)
+            .await?
             .ok_or(ServiceError::NotFound(task_id))
     }
 
-    fn persist(
+    async fn persist(
         &mut self,
         task: Task,
     ) -> Result<Task, ServiceError> {
-        let prepared = self.compatibility.prepare_task_write(&task)?;
-
-        self.repository.upsert(task.clone());
+        let stored = self.repository.upsert(task).await?;
         self.sync
-            .record_task_write(prepared)
+            .record_task_write(PreparedTaskWrite {
+                task_id: stored.task.id,
+                operation_count: stored.operation_count,
+            })
             .map_err(ServiceError::Sync)?;
 
-        Ok(task)
+        Ok(stored.task)
     }
 }
 
@@ -185,10 +181,8 @@ mod tests {
         CreateTaskRequest, TaskQuery, TaskSort, TransitionTaskRequest,
         UpdateTaskRequest,
     };
-    use crate::storage::{InMemoryTaskRepository, TaskRepository};
-    use crate::sync::{
-        InMemorySyncCoordinator, TaskwarriorCompatibilityGateway,
-    };
+    use crate::storage::TaskChampionTaskRepository;
+    use crate::sync::InMemorySyncCoordinator;
     use chrono::{TimeZone, Utc};
     use taskwarrior_core::TaskStatus;
     use uuid::Uuid;
@@ -197,20 +191,16 @@ mod tests {
         Utc.timestamp_opt(secs, 0).single().unwrap()
     }
 
-    fn service() -> TaskService<
-        InMemoryTaskRepository,
-        TaskwarriorCompatibilityGateway,
-        InMemorySyncCoordinator,
-    > {
+    fn service(
+    ) -> TaskService<TaskChampionTaskRepository, InMemorySyncCoordinator> {
         TaskService::new(
-            InMemoryTaskRepository::default(),
-            TaskwarriorCompatibilityGateway,
+            TaskChampionTaskRepository::default(),
             InMemorySyncCoordinator::default(),
         )
     }
 
-    #[test]
-    fn service_wires_create_update_transition_and_query_flows() {
+    #[tokio::test]
+    async fn service_wires_create_update_transition_and_query_flows() {
         let mut service = service();
         let task_id = Uuid::from_u128(100);
 
@@ -220,6 +210,7 @@ mod tests {
                 description: "Inbox".to_string(),
                 created_at: timestamp(100),
             })
+            .await
             .unwrap();
 
         let updated = service
@@ -238,6 +229,7 @@ mod tests {
                     modified_at: timestamp(150),
                 },
             )
+            .await
             .unwrap();
 
         let completed = service
@@ -248,6 +240,7 @@ mod tests {
                     changed_at: timestamp(300),
                 },
             )
+            .await
             .unwrap();
 
         let queried = service
@@ -259,6 +252,7 @@ mod tests {
                 reference_time: timestamp(400),
                 sort: TaskSort::DueAsc,
             })
+            .await
             .unwrap();
 
         assert_eq!(created.entry, Some(timestamp(100)));
@@ -273,8 +267,8 @@ mod tests {
         assert!(service.sync().writes()[0].operation_count > 0);
     }
 
-    #[test]
-    fn service_returns_task_by_id() {
+    #[tokio::test]
+    async fn service_returns_task_by_id() {
         let mut service = service();
         let task_id = Uuid::from_u128(101);
 
@@ -284,15 +278,72 @@ mod tests {
                 description: "Find me".to_string(),
                 created_at: timestamp(100),
             })
+            .await
             .unwrap();
 
-        let task = service.get_task(task_id).unwrap();
+        let task = service.get_task(task_id).await.unwrap();
 
         assert_eq!(task.description, "Find me");
     }
 
-    #[test]
-    fn service_rejects_invalid_input_before_persisting() {
+    #[tokio::test]
+    async fn service_reads_back_from_taskchampion_repository() {
+        let mut service = service();
+        let task_id = Uuid::from_u128(102);
+
+        service
+            .create_task(CreateTaskRequest {
+                id: task_id,
+                description: "Authoritative store".to_string(),
+                created_at: timestamp(100),
+            })
+            .await
+            .unwrap();
+        service
+            .update_task(
+                task_id,
+                UpdateTaskRequest {
+                    description: Some("TaskChampion backed".to_string()),
+                    project: Some("storage".to_string()),
+                    clear_project: false,
+                    tags: Some(vec!["backend".to_string()]),
+                    due: None,
+                    clear_due: false,
+                    wait: None,
+                    clear_wait: false,
+                    add_annotation: None,
+                    modified_at: timestamp(150),
+                },
+            )
+            .await
+            .unwrap();
+
+        let loaded = service.get_task(task_id).await.unwrap();
+        let queried = service
+            .query_tasks(&TaskQuery {
+                statuses: vec![TaskStatus::Pending],
+                required_tag: Some("backend".to_string()),
+                due_before: None,
+                include_waiting: true,
+                reference_time: timestamp(200),
+                sort: TaskSort::DescriptionAsc,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            loaded.description,
+            "TaskChampion backed"
+        );
+        assert_eq!(
+            loaded.project,
+            Some("storage".to_string())
+        );
+        assert_eq!(queried, vec![loaded]);
+    }
+
+    #[tokio::test]
+    async fn service_rejects_invalid_input_before_persisting() {
         let mut service = service();
 
         let err = service
@@ -301,13 +352,18 @@ mod tests {
                 description: " ".to_string(),
                 created_at: timestamp(10),
             })
+            .await
             .unwrap_err();
 
         assert_eq!(
             err,
             ServiceError::Validation(ValidationError::EmptyDescription,),
         );
-        assert!(service.repository().list().is_empty());
+        assert!(service
+            .query_tasks(&TaskQuery::all(timestamp(20)))
+            .await
+            .unwrap()
+            .is_empty());
         assert!(service.sync().writes().is_empty());
     }
 }
