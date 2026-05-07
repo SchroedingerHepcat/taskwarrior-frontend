@@ -6,7 +6,9 @@ use taskwarrior_core::{Task, TaskStatus};
 pub enum ApiMethod {
     Get,
     Post,
+    Put,
     Patch,
+    Delete,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -101,6 +103,21 @@ pub fn api_spec() -> &'static [ApiEndpoint] {
             path: "/tasks/query",
             summary: "Query tasks",
         },
+        ApiEndpoint {
+            method: ApiMethod::Get,
+            path: "/views",
+            summary: "List saved task views",
+        },
+        ApiEndpoint {
+            method: ApiMethod::Put,
+            path: "/views/{id}",
+            summary: "Create or update saved task view",
+        },
+        ApiEndpoint {
+            method: ApiMethod::Delete,
+            path: "/views/{id}",
+            summary: "Delete saved task view",
+        },
     ]
 }
 
@@ -175,7 +192,7 @@ mod tests {
     fn api_spec_covers_health_and_task_operations() {
         let endpoints = api_spec();
 
-        assert_eq!(endpoints.len(), 7);
+        assert_eq!(endpoints.len(), 10);
         assert!(endpoints.contains(&super::ApiEndpoint {
             method: ApiMethod::Get,
             path: "/tasks/{id}",

@@ -73,6 +73,20 @@ enum TaskQueryPreset {
   final String apiValue;
 }
 
+TaskQueryPreset _presetFromApi(String raw) {
+  return TaskQueryPreset.values.firstWhere(
+    (preset) => preset.apiValue == raw,
+    orElse: () => TaskQueryPreset.custom,
+  );
+}
+
+TaskSort _sortFromApi(String raw) {
+  return TaskSort.values.firstWhere(
+    (sort) => sort.apiValue == raw,
+    orElse: () => TaskSort.dueAsc,
+  );
+}
+
 enum TaskListMode {
   all('All'),
   inbox('Inbox'),
@@ -233,6 +247,97 @@ class TaskListFilter {
       includeBlocked: includeBlocked,
       referenceTime: referenceTime,
       sort: sort,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'preset': preset.apiValue,
+      'statuses': statuses.map((status) => status.apiValue).toList(),
+      'project': project,
+      'no_project': noProject,
+      'required_tag': requiredTag,
+      'no_tags': noTags,
+      'due_after': _dateToJson(dueAfter),
+      'due_before': _dateToJson(dueBefore),
+      'scheduled_after': _dateToJson(scheduledAfter),
+      'scheduled_before': _dateToJson(scheduledBefore),
+      'wait_after': _dateToJson(waitAfter),
+      'wait_before': _dateToJson(waitBefore),
+      'include_waiting': includeWaiting,
+      'include_scheduled': includeScheduled,
+      'include_blocked': includeBlocked,
+      'sort': sort.apiValue,
+    };
+  }
+
+  factory TaskListFilter.fromJson(Map<String, dynamic> json) {
+    final statuses = json['statuses'] as List<dynamic>? ?? <dynamic>[];
+
+    return TaskListFilter(
+      preset: _presetFromApi(json['preset'] as String? ?? 'custom'),
+      statuses: statuses.cast<String>().map(TaskStatus.fromApi).toList(),
+      project: json['project'] as String?,
+      noProject: json['no_project'] as bool? ?? false,
+      requiredTag: json['required_tag'] as String?,
+      noTags: json['no_tags'] as bool? ?? false,
+      dueAfter: _dateFromJson(json['due_after']),
+      dueBefore: _dateFromJson(json['due_before']),
+      scheduledAfter: _dateFromJson(json['scheduled_after']),
+      scheduledBefore: _dateFromJson(json['scheduled_before']),
+      waitAfter: _dateFromJson(json['wait_after']),
+      waitBefore: _dateFromJson(json['wait_before']),
+      includeWaiting: json['include_waiting'] as bool? ?? true,
+      includeScheduled: json['include_scheduled'] as bool? ?? true,
+      includeBlocked: json['include_blocked'] as bool? ?? true,
+      sort: _sortFromApi(json['sort'] as String? ?? TaskSort.dueAsc.apiValue),
+    );
+  }
+}
+
+class SavedTaskView {
+  const SavedTaskView({
+    required this.id,
+    required this.name,
+    required this.filter,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String name;
+  final TaskListFilter filter;
+  final DateTime updatedAt;
+
+  SavedTaskView copyWith({
+    String? name,
+    TaskListFilter? filter,
+    DateTime? updatedAt,
+  }) {
+    return SavedTaskView(
+      id: id,
+      name: name ?? this.name,
+      filter: filter ?? this.filter,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'id': id,
+      'name': name,
+      'filter': filter.toJson(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
+    };
+  }
+
+  factory SavedTaskView.fromJson(Map<String, dynamic> json) {
+    return SavedTaskView(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      filter: TaskListFilter.fromJson(
+        (json['filter'] as Map<String, dynamic>?) ?? <String, dynamic>{},
+      ),
+      updatedAt: _dateFromJson(json['updated_at']) ?? DateTime.now().toUtc(),
     );
   }
 }
@@ -702,4 +807,16 @@ class TaskItem {
 
     return '${date.month}/${date.day}/${date.year}';
   }
+}
+
+String? _dateToJson(DateTime? value) {
+  return value?.toUtc().toIso8601String();
+}
+
+DateTime? _dateFromJson(Object? value) {
+  if (value == null) {
+    return null;
+  }
+
+  return DateTime.parse(value as String).toUtc();
 }

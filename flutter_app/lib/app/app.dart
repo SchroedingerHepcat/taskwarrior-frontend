@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../backend/task_backend_client.dart';
+import '../models/shell_models.dart';
 import '../presentation/taskwarrior_shell.dart';
 import 'app_theme.dart';
 import 'routes.dart';
@@ -15,6 +16,8 @@ class TaskwarriorFrontendApp extends StatefulWidget {
     this.saveBackendUrl,
     this.initialThemePreference = AppThemePreference.dark,
     this.saveThemePreference,
+    this.initialSavedViews = const <SavedTaskView>[],
+    this.saveSavedViews,
   });
 
   final TaskBackendClient? backend;
@@ -24,6 +27,8 @@ class TaskwarriorFrontendApp extends StatefulWidget {
   final AppThemePreference initialThemePreference;
   final Future<void> Function(AppThemePreference preference)?
       saveThemePreference;
+  final List<SavedTaskView> initialSavedViews;
+  final Future<void> Function(List<SavedTaskView> views)? saveSavedViews;
 
   @override
   State<TaskwarriorFrontendApp> createState() => _TaskwarriorFrontendAppState();
@@ -42,6 +47,8 @@ class _TaskwarriorFrontendAppState extends State<TaskwarriorFrontendApp> {
       saveBackendUrl: widget.saveBackendUrl,
       themePreference: widget.initialThemePreference,
       saveThemePreference: widget.saveThemePreference,
+      savedViews: widget.initialSavedViews,
+      saveSavedViews: widget.saveSavedViews,
     )..load();
   }
 

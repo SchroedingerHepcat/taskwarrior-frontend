@@ -32,6 +32,9 @@ update, complete, filtered list, saved GTD query, and board-lane transition
 flows against the Rust backend. The task list also exposes an advanced filter
 panel for backend-owned query fields such as workflow preset, project, tag,
 no-project, no-tags, date ranges, status, visibility flags, and sort order.
+Saved views can be persisted locally, imported and exported as JSON, and
+selectively shared through the Rust backend as product-facing query
+definitions.
 Recurrence properties are preserved through the Taskwarrior-compatible model;
 recurrence instance generation remains delegated to Taskwarrior or
 TaskChampion-compatible semantics. The app should provide controls to view

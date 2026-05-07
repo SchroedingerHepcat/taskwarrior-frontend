@@ -9,6 +9,7 @@ class LocalDevelopmentBackendClient implements TaskBackendClient {
 
   final Duration _latency;
   final List<TaskItem> _tasks;
+  final List<SavedTaskView> _views = <SavedTaskView>[];
 
   @override
   Future<BackendHealth> healthcheck() async {
@@ -146,6 +147,29 @@ class LocalDevelopmentBackendClient implements TaskBackendClient {
     );
     _tasks[index] = updated;
     return updated;
+  }
+
+  @override
+  Future<List<SavedTaskView>> listSavedViews() async {
+    await Future<void>.delayed(_latency);
+    return List<SavedTaskView>.unmodifiable(_views);
+  }
+
+  @override
+  Future<void> saveSavedView(SavedTaskView view) async {
+    await Future<void>.delayed(_latency);
+    final index = _views.indexWhere((item) => item.id == view.id);
+    if (index == -1) {
+      _views.add(view);
+    } else {
+      _views[index] = view;
+    }
+  }
+
+  @override
+  Future<void> deleteSavedView(String viewId) async {
+    await Future<void>.delayed(_latency);
+    _views.removeWhere((view) => view.id == viewId);
   }
 }
 

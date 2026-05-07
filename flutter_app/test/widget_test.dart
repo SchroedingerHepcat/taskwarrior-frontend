@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flutter_app/app/app_theme.dart';
+import 'package:flutter_app/app/shell_controller.dart';
 import 'package:flutter_app/main.dart';
 import 'package:flutter_app/models/shell_models.dart';
 import 'package:flutter_app/backend/task_backend_client.dart';
@@ -305,6 +306,49 @@ void main() {
     expect(emptyMetadataQuery.requiredTag, isNull);
     expect(find.text('No metadata task'), findsOneWidget);
     expect(find.text('Task shell'), findsNothing);
+  });
+
+  test('saved views persist import export and share with backend', () async {
+    final backend = _FakeBackendClient();
+    final persistedViews = <SavedTaskView>[];
+    final controller = ShellController(
+      backend: backend,
+      saveSavedViews: (views) async {
+        persistedViews
+          ..clear()
+          ..addAll(views);
+      },
+      clock: () => DateTime.utc(2026, 4, 12, 10),
+    );
+    addTearDown(controller.dispose);
+
+    await controller.load();
+    await controller.setListFilter(
+      const TaskListFilter(
+        project: 'Flutter',
+      ),
+    );
+    await controller.saveCurrentView('Frontend work');
+
+    expect(persistedViews, hasLength(1));
+    expect(persistedViews.single.name, 'Frontend work');
+    expect(persistedViews.single.filter.project, 'Flutter');
+
+    final exported = controller.exportSavedViewsJson();
+    await controller.saveViewToBackend(persistedViews.single.id);
+    expect(backend.savedViews, hasLength(1));
+
+    await controller.deleteSavedView(persistedViews.single.id);
+    expect(persistedViews, isEmpty);
+
+    await controller.importSavedViewsJson(exported);
+    expect(persistedViews, hasLength(1));
+
+    await controller.deleteSavedView(persistedViews.single.id);
+    await controller.refreshBackendSavedViews();
+    await controller.retrieveBackendSavedView(backend.savedViews.single.id);
+    expect(persistedViews, hasLength(1));
+    expect(controller.listTasks.map((task) => task.title), ['Task shell']);
   });
 
   testWidgets('task list checkbox transitions completion', (tester) async {
@@ -672,6 +716,21 @@ class _FailingBackendClient implements TaskBackendClient {
   ) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<List<SavedTaskView>> listSavedViews() {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> saveSavedView(SavedTaskView view) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteSavedView(String viewId) {
+    throw UnimplementedError();
+  }
 }
 
 class _FakeBackendClient implements TaskBackendClient {
@@ -687,6 +746,7 @@ class _FakeBackendClient implements TaskBackendClient {
   final List<TaskStatus> transitionedStatuses = <TaskStatus>[];
   final List<String> updatedDescriptions = <String>[];
   final List<DateTime?> updatedDueDates = <DateTime?>[];
+  final List<SavedTaskView> savedViews = <SavedTaskView>[];
   final List<TaskItem> _tasks = <TaskItem>[
     TaskItem(
       id: 'task-1',
@@ -736,6 +796,26 @@ class _FakeBackendClient implements TaskBackendClient {
       label: label,
       environment: 'Backend scaffold mirror',
     );
+  }
+
+  @override
+  Future<List<SavedTaskView>> listSavedViews() async {
+    return List<SavedTaskView>.unmodifiable(savedViews);
+  }
+
+  @override
+  Future<void> saveSavedView(SavedTaskView view) async {
+    final index = savedViews.indexWhere((item) => item.id == view.id);
+    if (index == -1) {
+      savedViews.add(view);
+    } else {
+      savedViews[index] = view;
+    }
+  }
+
+  @override
+  Future<void> deleteSavedView(String viewId) async {
+    savedViews.removeWhere((view) => view.id == viewId);
   }
 
   @override

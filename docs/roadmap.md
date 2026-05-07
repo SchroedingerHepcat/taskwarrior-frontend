@@ -261,6 +261,9 @@ board views, and advanced filtering.
   project and tag dropdowns based on available backend task values, includes
   no-project and no-tags options, and uses typeable date-range inputs with
   picker buttons.
+- Saved task views can be created, updated, selected, deleted, imported,
+  exported, persisted locally across Flutter app restarts, and selectively
+  pushed to or retrieved from the backend for sharing between clients.
 - Board drag-and-drop now calls a product-facing backend board transition
   operation for pending, waiting, and completed lanes.
 - Platform-specific board polish remains part of Milestone 8.
@@ -271,15 +274,8 @@ board views, and advanced filtering.
 
 ### Remaining Work
 
-- Add customizable task lists or saved views that can be created, edited,
-  selected, and deleted from the Flutter client.
-- Persist saved list/view configuration across app restarts.
 - Let dashboard configuration use saved views instead of only the current
   fixed widget set.
-- Add tests proving saved views produce the expected backend query shape and
-  survive restart.
-- Decide whether saved views are backend-owned resources or local client
-  preferences backed by product-facing query objects.
 - Add frontend controls for creating and modifying every Taskwarrior-supported
   recurrence schedule option on existing tasks.
 - Add tests proving recurrence controls submit Taskwarrior-compatible

@@ -147,6 +147,35 @@ class HttpTaskBackendClient implements TaskBackendClient {
     return _decodeTaskResponse(response.body);
   }
 
+  @override
+  Future<List<SavedTaskView>> listSavedViews() async {
+    final response = await _client.get(_uri('/views'));
+    _ensureSuccess(response);
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+
+    return (decoded['views'] as List<dynamic>)
+        .map((view) => SavedTaskView.fromJson(
+              view as Map<String, dynamic>,
+            ))
+        .toList();
+  }
+
+  @override
+  Future<void> saveSavedView(SavedTaskView view) async {
+    final response = await _client.put(
+      _uri('/views/${view.id}'),
+      headers: _jsonHeaders,
+      body: jsonEncode(view.toJson()),
+    );
+    _ensureSuccess(response);
+  }
+
+  @override
+  Future<void> deleteSavedView(String viewId) async {
+    final response = await _client.delete(_uri('/views/$viewId'));
+    _ensureSuccess(response);
+  }
+
   Map<String, String> get _jsonHeaders => <String, String>{
         'content-type': 'application/json',
       };

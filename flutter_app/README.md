@@ -9,6 +9,8 @@ Current scope:
 - dashboard, task list, board, and detail screens
 - frontend controls for backend-owned task list filtering, including
   dropdown metadata filters, no-metadata choices, and date ranges
+- saved task views with local persistence, JSON import/export, and backend
+  push/pull sharing
 - an HTTP backend client used by the application entry point
 - a local development adapter retained for widget tests and local UI work
 

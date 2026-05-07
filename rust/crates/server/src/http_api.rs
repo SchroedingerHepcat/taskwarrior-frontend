@@ -14,10 +14,11 @@ use crate::sync::InMemorySyncCoordinator;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -31,6 +32,7 @@ type AppService =
 #[derive(Clone)]
 pub struct AppState {
     service: Arc<Mutex<AppService>>,
+    saved_views: Arc<Mutex<BTreeMap<String, HttpSavedView>>>,
 }
 
 impl Default for AppState {
@@ -40,6 +42,7 @@ impl Default for AppState {
                 TaskChampionTaskRepository::default(),
                 InMemorySyncCoordinator::disabled(),
             ))),
+            saved_views: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 }
@@ -61,6 +64,7 @@ impl AppState {
             service: Arc::new(Mutex::new(TaskService::new(
                 repository, sync,
             ))),
+            saved_views: Arc::new(Mutex::new(BTreeMap::new())),
         })
     }
 }
@@ -132,6 +136,39 @@ pub struct HttpTaskQueryRequest {
     pub sort: Option<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+pub struct HttpSavedView {
+    pub id: String,
+    pub name: String,
+    pub filter: HttpSavedViewFilter,
+    pub updated_at: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+pub struct HttpSavedViewFilter {
+    pub preset: Option<String>,
+    pub statuses: Option<Vec<String>>,
+    pub project: Option<String>,
+    pub no_project: Option<bool>,
+    pub required_tag: Option<String>,
+    pub no_tags: Option<bool>,
+    pub due_after: Option<String>,
+    pub due_before: Option<String>,
+    pub scheduled_after: Option<String>,
+    pub scheduled_before: Option<String>,
+    pub wait_after: Option<String>,
+    pub wait_before: Option<String>,
+    pub include_waiting: Option<bool>,
+    pub include_scheduled: Option<bool>,
+    pub include_blocked: Option<bool>,
+    pub sort: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct SavedViewListResponse {
+    views: Vec<HttpSavedView>,
+}
+
 #[derive(Debug, Serialize)]
 struct ApiErrorBody {
     error: String,
@@ -158,6 +195,11 @@ pub fn build_router_with_state(state: AppState) -> Router {
             post(transition_board_lane),
         )
         .route("/tasks/query", post(query_tasks))
+        .route("/views", get(list_saved_views))
+        .route(
+            "/views/{id}",
+            put(save_saved_view).delete(delete_saved_view),
+        )
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
@@ -312,6 +354,38 @@ async fn query_tasks(
     }))
 }
 
+async fn list_saved_views(
+    State(state): State<AppState>
+) -> Json<SavedViewListResponse> {
+    let views = state.saved_views.lock().await;
+
+    Json(SavedViewListResponse {
+        views: views.values().cloned().collect(),
+    })
+}
+
+async fn save_saved_view(
+    State(state): State<AppState>,
+    Path(view_id): Path<String>,
+    Json(view): Json<HttpSavedView>,
+) -> Result<Json<HttpSavedView>, ServiceHttpError> {
+    validate_saved_view(&view_id, &view)?;
+    let mut views = state.saved_views.lock().await;
+    views.insert(view_id, view.clone());
+
+    Ok(Json(view))
+}
+
+async fn delete_saved_view(
+    State(state): State<AppState>,
+    Path(view_id): Path<String>,
+) -> StatusCode {
+    let mut views = state.saved_views.lock().await;
+    views.remove(&view_id);
+
+    StatusCode::NO_CONTENT
+}
+
 fn build_task_query(
     request: HttpTaskQueryRequest,
     reference_time: DateTime<Utc>,
@@ -355,6 +429,49 @@ fn build_task_query(
         reference_time,
         sort: parse_sort(request.sort.as_deref()),
     })
+}
+
+fn validate_saved_view(
+    expected_id: &str,
+    view: &HttpSavedView,
+) -> Result<(), ServiceHttpError> {
+    if view.id != expected_id {
+        return Err(ServiceHttpError(ServiceError::Sync(
+            "view id does not match request path".to_string(),
+        )));
+    }
+
+    if view.id.trim().is_empty() || view.name.trim().is_empty() {
+        return Err(ServiceHttpError(ServiceError::Sync(
+            "view id and name are required".to_string(),
+        )));
+    }
+
+    let query = HttpTaskQueryRequest {
+        preset: view.filter.preset.clone(),
+        statuses: view.filter.statuses.clone(),
+        project: view.filter.project.clone(),
+        no_project: view.filter.no_project,
+        required_tag: view.filter.required_tag.clone(),
+        no_tags: view.filter.no_tags,
+        due_after: view.filter.due_after.clone(),
+        due_before: view.filter.due_before.clone(),
+        scheduled_after: view.filter.scheduled_after.clone(),
+        scheduled_before: view.filter.scheduled_before.clone(),
+        wait_after: view.filter.wait_after.clone(),
+        wait_before: view.filter.wait_before.clone(),
+        include_waiting: view.filter.include_waiting,
+        include_scheduled: view.filter.include_scheduled,
+        include_blocked: view.filter.include_blocked,
+        reference_time: None,
+        sort: view.filter.sort.clone(),
+    };
+    build_task_query(query, Utc::now())?
+        .validate()
+        .map_err(|error| ServiceHttpError(ServiceError::Validation(error)))?;
+    parse_datetime(view.updated_at.clone())?;
+
+    Ok(())
 }
 
 fn parse_query_preset(raw: Option<&str>) -> TaskQueryPreset {
@@ -635,6 +752,75 @@ mod tests {
             1
         );
         assert_eq!(queried["tasks"][0]["id"], ready);
+    }
+
+    #[tokio::test]
+    async fn http_routes_support_shared_saved_views() {
+        let app = build_router();
+        let saved_view = json!({
+            "id": "ready-next",
+            "name": "Ready next",
+            "updated_at": "2026-04-12T10:00:00Z",
+            "filter": {
+                "preset": "custom",
+                "statuses": ["pending"],
+                "required_tag": "next",
+                "no_project": false,
+                "no_tags": false,
+                "include_waiting": false,
+                "include_scheduled": false,
+                "include_blocked": false,
+                "sort": "due_asc"
+            }
+        });
+
+        let save = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::PUT)
+                    .uri("/views/ready-next")
+                    .header("content-type", "application/json")
+                    .body(Body::from(saved_view.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(save.status(), StatusCode::OK);
+
+        let list = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/views")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(list.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(list.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let listed: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            listed["views"].as_array().unwrap().len(),
+            1
+        );
+        assert_eq!(listed["views"][0]["name"], "Ready next");
+
+        let delete = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::DELETE)
+                    .uri("/views/ready-next")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(delete.status(), StatusCode::NO_CONTENT);
     }
 
     async fn create_http_task(

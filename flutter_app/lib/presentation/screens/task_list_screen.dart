@@ -28,6 +28,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
   late final TextEditingController _scheduledBeforeController;
   late final TextEditingController _waitAfterController;
   late final TextEditingController _waitBeforeController;
+  late final TextEditingController _savedViewNameController;
+  late final TextEditingController _savedViewImportController;
   bool _isCreating = false;
 
   @override
@@ -40,6 +42,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
     _scheduledBeforeController = TextEditingController();
     _waitAfterController = TextEditingController();
     _waitBeforeController = TextEditingController();
+    _savedViewNameController = TextEditingController();
+    _savedViewImportController = TextEditingController();
   }
 
   @override
@@ -51,6 +55,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
     _scheduledBeforeController.dispose();
     _waitAfterController.dispose();
     _waitBeforeController.dispose();
+    _savedViewNameController.dispose();
+    _savedViewImportController.dispose();
     super.dispose();
   }
 
@@ -134,6 +140,12 @@ class _TaskListScreenState extends State<TaskListScreen> {
           waitBeforeController: _waitBeforeController,
           onClear: _clearAdvancedFilter,
         ),
+        const SizedBox(height: 12),
+        _SavedViewsPanel(
+          controller: widget.controller,
+          nameController: _savedViewNameController,
+          importController: _savedViewImportController,
+        ),
         const SizedBox(height: 16),
         if (tasks.isEmpty)
           const Padding(
@@ -211,6 +223,241 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
     _createTask();
     return KeyEventResult.handled;
+  }
+}
+
+class _SavedViewsPanel extends StatelessWidget {
+  const _SavedViewsPanel({
+    required this.controller,
+    required this.nameController,
+    required this.importController,
+  });
+
+  final ShellController controller;
+  final TextEditingController nameController;
+  final TextEditingController importController;
+
+  @override
+  Widget build(BuildContext context) {
+    return ExpansionTile(
+      key: const Key('saved-views-panel'),
+      tilePadding: EdgeInsets.zero,
+      title: const Text('Saved views'),
+      subtitle: Text(
+        controller.savedViews.isEmpty
+            ? 'Create reusable task list filters.'
+            : '${controller.savedViews.length} local view(s).',
+      ),
+      children: <Widget>[
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: <Widget>[
+            _SavedViewDropdown(
+              key: const Key('saved-view-select-field'),
+              value: controller.selectedSavedViewId,
+              views: controller.savedViews,
+              emptyLabel: 'No local views',
+              onChanged: (viewId) {
+                if (viewId != null) {
+                  final view = controller.savedViews.firstWhere(
+                    (view) => view.id == viewId,
+                  );
+                  nameController.text = view.name;
+                  controller.selectSavedView(viewId);
+                }
+              },
+            ),
+            SizedBox(
+              width: 240,
+              child: TextField(
+                key: const Key('saved-view-name-field'),
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'View name',
+                ),
+              ),
+            ),
+            FilledButton(
+              key: const Key('saved-view-create-button'),
+              onPressed: () => _saveCurrentView(),
+              child: const Text('Save current'),
+            ),
+            FilledButton.tonal(
+              key: const Key('saved-view-update-button'),
+              onPressed: controller.selectedSavedViewId == null
+                  ? null
+                  : () => _saveCurrentView(
+                        viewId: controller.selectedSavedViewId,
+                      ),
+              child: const Text('Update selected'),
+            ),
+            TextButton(
+              key: const Key('saved-view-delete-button'),
+              onPressed: controller.selectedSavedViewId == null
+                  ? null
+                  : () => controller.deleteSavedView(
+                        controller.selectedSavedViewId!,
+                      ),
+              child: const Text('Delete local'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: <Widget>[
+            FilledButton.tonal(
+              key: const Key('saved-view-export-button'),
+              onPressed: () => _exportViews(context),
+              child: const Text('Export'),
+            ),
+            SizedBox(
+              width: 320,
+              child: TextField(
+                key: const Key('saved-view-import-field'),
+                controller: importController,
+                minLines: 1,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Import JSON',
+                ),
+              ),
+            ),
+            FilledButton.tonal(
+              key: const Key('saved-view-import-button'),
+              onPressed: () async {
+                await controller.importSavedViewsJson(importController.text);
+                importController.clear();
+              },
+              child: const Text('Import'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: <Widget>[
+            _SavedViewDropdown(
+              key: const Key('backend-view-select-field'),
+              value: null,
+              views: controller.backendSavedViews,
+              emptyLabel: 'No backend views',
+              onChanged: (viewId) {
+                if (viewId != null) {
+                  controller.retrieveBackendSavedView(viewId);
+                }
+              },
+            ),
+            FilledButton.tonal(
+              key: const Key('saved-view-refresh-backend-button'),
+              onPressed: controller.refreshBackendSavedViews,
+              child: const Text('Refresh backend'),
+            ),
+            FilledButton.tonal(
+              key: const Key('saved-view-save-backend-button'),
+              onPressed: controller.selectedSavedViewId == null
+                  ? null
+                  : () => controller.saveViewToBackend(
+                        controller.selectedSavedViewId!,
+                      ),
+              child: const Text('Save selected to backend'),
+            ),
+            TextButton(
+              key: const Key('saved-view-delete-backend-button'),
+              onPressed: controller.selectedSavedViewId == null
+                  ? null
+                  : () => controller.deleteBackendSavedView(
+                        controller.selectedSavedViewId!,
+                      ),
+              child: const Text('Delete selected from backend'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _saveCurrentView({
+    String? viewId,
+  }) async {
+    await controller.saveCurrentView(
+      nameController.text,
+      viewId: viewId,
+    );
+  }
+
+  Future<void> _exportViews(BuildContext context) async {
+    final selected = controller.selectedSavedViewId;
+    final exported = controller.exportSavedViewsJson(
+      viewIds: selected == null ? null : <String>[selected],
+    );
+    await Clipboard.setData(ClipboardData(text: exported));
+    if (!context.mounted) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Exported saved views'),
+          content: SizedBox(
+            width: 520,
+            child: SelectableText(exported),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _SavedViewDropdown extends StatelessWidget {
+  const _SavedViewDropdown({
+    super.key,
+    required this.value,
+    required this.views,
+    required this.emptyLabel,
+    required this.onChanged,
+  });
+
+  final String? value;
+  final List<SavedTaskView> views;
+  final String emptyLabel;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = views.any((view) => view.id == value) ? value : null;
+
+    return SizedBox(
+      width: 260,
+      child: DropdownButtonFormField<String>(
+        initialValue: selected,
+        isExpanded: true,
+        decoration: const InputDecoration(labelText: 'View'),
+        hint: Text(emptyLabel),
+        items: views.map((view) {
+          return DropdownMenuItem<String>(
+            value: view.id,
+            child: Text(view.name),
+          );
+        }).toList(),
+        onChanged: views.isEmpty ? null : onChanged,
+      ),
+    );
   }
 }
 

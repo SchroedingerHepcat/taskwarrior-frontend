@@ -23,4 +23,10 @@ abstract interface class TaskBackendClient {
     String taskId,
     BoardTransitionInput input,
   );
+
+  Future<List<SavedTaskView>> listSavedViews();
+
+  Future<void> saveSavedView(SavedTaskView view);
+
+  Future<void> deleteSavedView(String viewId);
 }

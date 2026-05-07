@@ -255,6 +255,10 @@ The intended layer responsibilities are:
 - The project still needs a product-facing task model and API shape, because
   dashboards, boards, filters, and future integrations should not be forced to
   couple directly to low-level TaskChampion object shapes.
+- Saved views are product-facing query configuration, not task storage. They
+  may be stored locally in Flutter for client restart behavior and shared
+  through backend endpoints for cross-client reuse, but they must not become an
+  independent task database or expose TaskChampion internals.
 - Recurrence instance creation is owned by Taskwarrior or TaskChampion
   semantics. This application should expose recurring tasks, allow users to
   create recurrence settings on existing tasks, and allow users to modify
@@ -345,6 +349,8 @@ code and tests in this repository:
 - a frontend advanced filter panel that sends product-facing query fields,
   including project, no-project, tag, no-tags, and date ranges, to the backend
   instead of reimplementing Taskwarrior filtering in Flutter
+- local saved task views with create, edit, select, delete, import, export,
+  and backend push/pull behavior based on product-facing query definitions
 - an architectural decision to support an external TaskChampion sync server as
   the first-party task sync coordinator
 

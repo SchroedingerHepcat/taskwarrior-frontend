@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 
 import '../backend/task_backend_client.dart';
@@ -12,6 +14,8 @@ class ShellController extends ChangeNotifier {
     Future<void> Function(String baseUrl)? saveBackendUrl,
     AppThemePreference themePreference = AppThemePreference.dark,
     Future<void> Function(AppThemePreference preference)? saveThemePreference,
+    List<SavedTaskView> savedViews = const <SavedTaskView>[],
+    Future<void> Function(List<SavedTaskView> views)? saveSavedViews,
     DateTime Function()? clock,
   })  : _backend = backend,
         _backendUrl = backendUrl,
@@ -19,6 +23,8 @@ class ShellController extends ChangeNotifier {
         _saveBackendUrl = saveBackendUrl,
         _themePreference = themePreference,
         _saveThemePreference = saveThemePreference,
+        _savedViews = List<SavedTaskView>.from(savedViews),
+        _saveSavedViews = saveSavedViews,
         _clock = clock ?? DateTime.now;
 
   TaskBackendClient? _backend;
@@ -27,6 +33,7 @@ class ShellController extends ChangeNotifier {
   final Future<void> Function(String baseUrl)? _saveBackendUrl;
   final Future<void> Function(AppThemePreference preference)?
       _saveThemePreference;
+  final Future<void> Function(List<SavedTaskView> views)? _saveSavedViews;
   final DateTime Function() _clock;
 
   bool _isLoading = true;
@@ -41,6 +48,9 @@ class ShellController extends ChangeNotifier {
       <DashboardWidgetType, DashboardWidgetData>{};
   TaskListMode _listMode = TaskListMode.all;
   TaskListFilter _listFilter = const TaskListFilter();
+  List<SavedTaskView> _savedViews;
+  List<SavedTaskView> _backendSavedViews = const <SavedTaskView>[];
+  String? _selectedSavedViewId;
   AppThemePreference _themePreference;
   String? _selectedTaskId;
   String? _boardIntent;
@@ -53,6 +63,12 @@ class ShellController extends ChangeNotifier {
   List<TaskItem> get listTasks => List.unmodifiable(_listTasks);
   TaskListMode get listMode => _listMode;
   TaskListFilter get listFilter => _listFilter;
+  List<SavedTaskView> get savedViews => List.unmodifiable(_savedViews);
+  List<SavedTaskView> get backendSavedViews {
+    return List.unmodifiable(_backendSavedViews);
+  }
+
+  String? get selectedSavedViewId => _selectedSavedViewId;
   AppThemePreference get themePreference => _themePreference;
   String? get backendUrl => _backendUrl;
   Set<DashboardWidgetType> get enabledWidgets => Set.of(_enabledWidgets);
@@ -165,6 +181,7 @@ class ShellController extends ChangeNotifier {
   Future<void> setListMode(TaskListMode mode) async {
     _listMode = mode;
     _listFilter = const TaskListFilter();
+    _selectedSavedViewId = null;
     await _refreshTaskViews();
     notifyListeners();
   }
@@ -172,6 +189,7 @@ class ShellController extends ChangeNotifier {
   Future<void> setListFilter(TaskListFilter filter) async {
     _listFilter = filter;
     _listMode = TaskListMode.all;
+    _selectedSavedViewId = null;
     await _refreshTaskViews();
     notifyListeners();
   }
@@ -179,8 +197,131 @@ class ShellController extends ChangeNotifier {
   Future<void> clearListFilter() async {
     _listFilter = const TaskListFilter();
     _listMode = TaskListMode.all;
+    _selectedSavedViewId = null;
     await _refreshTaskViews();
     notifyListeners();
+  }
+
+  Future<void> selectSavedView(String viewId) async {
+    final view = _savedViews.firstWhere((view) => view.id == viewId);
+    _selectedSavedViewId = view.id;
+    _listFilter = view.filter;
+    _listMode = TaskListMode.all;
+    await _refreshTaskViews();
+    notifyListeners();
+  }
+
+  Future<void> saveCurrentView(
+    String name, {
+    String? viewId,
+  }) async {
+    final normalized = name.trim();
+    if (normalized.isEmpty) {
+      _errorMessage = 'Saved view name is required.';
+      notifyListeners();
+      return;
+    }
+
+    final now = _clock().toUtc();
+    final id = viewId ?? _newSavedViewId(now);
+    final view = SavedTaskView(
+      id: id,
+      name: normalized,
+      filter: _listFilter,
+      updatedAt: now,
+    );
+    _upsertSavedView(view);
+    _selectedSavedViewId = view.id;
+    await _persistSavedViews();
+    notifyListeners();
+  }
+
+  Future<void> deleteSavedView(String viewId) async {
+    _savedViews = _savedViews.where((view) => view.id != viewId).toList();
+    if (_selectedSavedViewId == viewId) {
+      _selectedSavedViewId = null;
+    }
+    await _persistSavedViews();
+    notifyListeners();
+  }
+
+  String exportSavedViewsJson({
+    Iterable<String>? viewIds,
+  }) {
+    final ids = viewIds?.toSet();
+    final views = ids == null
+        ? _savedViews
+        : _savedViews.where((view) => ids.contains(view.id)).toList();
+
+    return const JsonEncoder.withIndent('  ').convert(
+      <String, dynamic>{
+        'version': 1,
+        'views': views.map((view) => view.toJson()).toList(),
+      },
+    );
+  }
+
+  Future<void> importSavedViewsJson(String raw) async {
+    try {
+      final views = _decodeSavedViews(raw);
+      for (final view in views) {
+        _upsertSavedView(view);
+      }
+      await _persistSavedViews();
+      notifyListeners();
+    } catch (error) {
+      _errorMessage = 'Could not import saved views: $error';
+      notifyListeners();
+    }
+  }
+
+  Future<void> refreshBackendSavedViews() async {
+    final backend = _backend;
+    if (backend == null) {
+      _errorMessage = 'Enter the backend API URL in Settings to connect.';
+      notifyListeners();
+      return;
+    }
+
+    try {
+      _backendSavedViews = await backend.listSavedViews();
+      notifyListeners();
+    } catch (error) {
+      _errorMessage = _humanReadableError(error);
+      notifyListeners();
+    }
+  }
+
+  Future<void> saveViewToBackend(String viewId) async {
+    final backend = _backend;
+    if (backend == null) {
+      _errorMessage = 'Enter the backend API URL in Settings to connect.';
+      notifyListeners();
+      return;
+    }
+
+    final view = _savedViews.firstWhere((view) => view.id == viewId);
+    await backend.saveSavedView(view);
+    await refreshBackendSavedViews();
+  }
+
+  Future<void> retrieveBackendSavedView(String viewId) async {
+    final view = _backendSavedViews.firstWhere((view) => view.id == viewId);
+    _upsertSavedView(view);
+    await _persistSavedViews();
+    await selectSavedView(view.id);
+  }
+
+  Future<void> deleteBackendSavedView(String viewId) async {
+    final backend = _backend;
+    if (backend == null) {
+      _errorMessage = 'Enter the backend API URL in Settings to connect.';
+      notifyListeners();
+      return;
+    }
+
+    await backend.deleteSavedView(viewId);
+    await refreshBackendSavedViews();
   }
 
   Future<void> toggleWidget(DashboardWidgetType widget) async {
@@ -272,6 +413,7 @@ class ShellController extends ChangeNotifier {
 
     try {
       _health = await backend.healthcheck();
+      _backendSavedViews = await backend.listSavedViews();
       await _refreshTaskViews();
       await _refreshDashboardWidgets();
     } catch (error) {
@@ -349,6 +491,50 @@ class ShellController extends ChangeNotifier {
       _isSaving = false;
       notifyListeners();
     }
+  }
+
+  void _upsertSavedView(SavedTaskView view) {
+    final index = _savedViews.indexWhere((item) => item.id == view.id);
+    if (index == -1) {
+      _savedViews = <SavedTaskView>[..._savedViews, view];
+    } else {
+      _savedViews = <SavedTaskView>[..._savedViews]..[index] = view;
+    }
+    _savedViews.sort((left, right) => left.name.compareTo(right.name));
+  }
+
+  Future<void> _persistSavedViews() async {
+    await _saveSavedViews?.call(List<SavedTaskView>.unmodifiable(_savedViews));
+  }
+
+  String _newSavedViewId(DateTime now) {
+    return 'view-${now.microsecondsSinceEpoch}';
+  }
+
+  List<SavedTaskView> _decodeSavedViews(String raw) {
+    final decoded = jsonDecode(raw);
+    if (decoded is Map<String, dynamic>) {
+      final views = decoded['views'];
+      if (views is List<dynamic>) {
+        return views
+            .map((view) => SavedTaskView.fromJson(
+                  view as Map<String, dynamic>,
+                ))
+            .toList();
+      }
+
+      return <SavedTaskView>[SavedTaskView.fromJson(decoded)];
+    }
+
+    if (decoded is List<dynamic>) {
+      return decoded
+          .map((view) => SavedTaskView.fromJson(
+                view as Map<String, dynamic>,
+              ))
+          .toList();
+    }
+
+    throw const FormatException('expected a saved view or saved view list');
   }
 
   String _humanReadableError(Object error) {

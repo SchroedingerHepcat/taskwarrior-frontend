@@ -33,6 +33,9 @@ The current HTTP surface covers:
 - `POST /tasks/{id}/transition`
 - `POST /tasks/{id}/board-transition`
 - `POST /tasks/query`
+- `GET /views`
+- `PUT /views/{id}`
+- `DELETE /views/{id}`
 
 The current product-facing operations cover:
 
@@ -45,6 +48,8 @@ The current product-facing operations cover:
 - board lane transitions for supported lanes
 - dashboard and list data backed by the same query surface
 - frontend-visible advanced list filtering for the current query fields
+- local saved task views backed by product-facing query definitions
+- optional backend sharing for saved task views
 
 The current query shape uses product-level fields rather than raw
 TaskChampion objects or file-oriented Taskwarrior concepts:
@@ -67,6 +72,13 @@ TaskChampion objects or file-oriented Taskwarrior concepts:
 The saved query presets are GTD-shaped backend semantics. Clients request the
 preset rather than reimplementing waiting, scheduled, stale-review, or
 dependency rules.
+
+Saved task views are separate from task storage. A saved view contains an id,
+name, update timestamp, and product-facing query filter. Flutter persists
+local saved views for client restart behavior and may selectively push or pull
+individual views through the backend `/views` endpoints for sharing between
+clients. These endpoints store view definitions only; they do not store tasks,
+TaskChampion replica data, or Taskwarrior data files.
 
 The current update shape is still intentionally narrow:
 
@@ -167,6 +179,5 @@ sync client API:
 - offline write reconciliation
 - conflict behavior across synchronized replicas
 - pagination and list result shape
-- how saved and user-customizable views map onto product-facing query objects
 - how recurring task queries should be represented
 - whether future protocols are needed beyond the current HTTP boundary
