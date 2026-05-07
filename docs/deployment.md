@@ -34,6 +34,15 @@ The web client no longer bakes the backend URL into the build. Open Settings
 in the app, enter the backend API URL, and the client persists that value
 locally across browser or app restarts.
 
+For the default compose ports, enter:
+
+```text
+http://127.0.0.1:38180
+```
+
+The app normalizes bare host and port values such as `127.0.0.1:38180` to
+`http://127.0.0.1:38180` before saving them.
+
 The container ports remain `8080` for the backend and `80` for the web server.
 Only the host-side defaults are shifted to less common ports. Operators can
 override them with `BACKEND_HOST_PORT` and `WEB_HOST_PORT`.
@@ -43,15 +52,24 @@ URL in the app Settings screen.
 
 ## Persistent Data
 
-The backend container mounts a Docker volume at `/data`.
+The backend container bind-mounts `deploy/data` from the repository checkout to
+`/data` inside the backend container.
 
 The example backend config stores:
 
-- TaskChampion SQLite task storage at `/data/taskchampion.sqlite`
-- shared UI state at `/data/taskwarrior-frontend-ui-state.json`
+- TaskChampion SQLite task storage at
+  `deploy/data/taskchampion.sqlite`
+- shared UI state at
+  `deploy/data/taskwarrior-frontend-ui-state.json`
 
 These files are backend-owned state. Do not synchronize them with an external
 file-sync tool. Use TaskChampion sync for multi-device task synchronization.
+The `deploy/data` directory is intentionally ignored by git.
+
+The compose file runs the backend as `BACKEND_UID:BACKEND_GID`, defaulting to
+`1000:1000`, so files created under `deploy/data` are usable from a typical
+Linux host account. Override those variables if your host user has different
+ids.
 
 ## Backend Configuration
 
@@ -159,10 +177,22 @@ For a release web build:
 
 ```sh
 cd flutter_app
-flutter build web --release --no-wasm-dry-run
+flutter build web \
+  --release \
+  --no-source-maps \
+  --no-wasm-dry-run \
+  --no-web-resources-cdn
 ```
 
 Serve `flutter_app/build/web` with any static web server.
+
+This build intentionally bundles Flutter web resources locally. That keeps
+self-hosted deployments from depending on Google CDN access for CanvasKit.
+
+If a browser previously loaded an older build, clear site data or unregister
+the old Flutter service worker for the web origin before retesting. Otherwise
+the browser may continue serving a stale bundle that still references CDN
+resources.
 
 ## Current Limits
 

@@ -539,7 +539,7 @@ class ShellController extends ChangeNotifier {
   }
 
   Future<void> configureBackendUrl(String baseUrl) async {
-    final normalized = baseUrl.trim();
+    final normalized = _normalizeBackendUrl(baseUrl);
     if (normalized.isEmpty) {
       _errorMessage = 'Backend URL is required.';
       notifyListeners();
@@ -557,6 +557,27 @@ class ShellController extends ChangeNotifier {
     _backendUrl = normalized;
     await _saveBackendUrl?.call(normalized);
     await _refresh();
+  }
+
+  String _normalizeBackendUrl(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      return '';
+    }
+
+    final withScheme = trimmed.contains('://') ? trimmed : 'http://$trimmed';
+    final uri = Uri.parse(withScheme);
+    final normalized = Uri(
+      scheme: uri.scheme,
+      userInfo: uri.userInfo,
+      host: uri.host,
+      port: uri.hasPort ? uri.port : null,
+      path: uri.path == '/' ? '' : uri.path,
+      query: uri.query.isEmpty ? null : uri.query,
+      fragment: uri.fragment.isEmpty ? null : uri.fragment,
+    );
+
+    return normalized.toString();
   }
 
   Future<void> setThemePreference(AppThemePreference preference) async {

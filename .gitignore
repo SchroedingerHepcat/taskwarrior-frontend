@@ -4,3 +4,5 @@ rust/target/
 backend.toml
 Guidance
 *.sqlite
+deploy/data/
+deploy/docker-compose.override.yaml

@@ -65,6 +65,7 @@ ThemeData _buildAppTheme({
     useMaterial3: true,
     colorScheme: scheme,
     scaffoldBackgroundColor: canvas,
+    fontFamily: 'sans-serif',
     textTheme: const TextTheme(
       headlineMedium: TextStyle(
         fontWeight: FontWeight.w800,

@@ -372,8 +372,9 @@ deployment and basic operational controls.
 - HTTP task reads and writes now perform configured TaskChampion sync at the
   backend boundary.
 - A minimal Docker Compose path now builds the Rust backend and Flutter web
-  client, uses durable backend volumes, avoids build-time backend URL
-  configuration, and defines container health checks.
+  client, uses a durable local filesystem bind mount for backend state,
+  avoids build-time backend URL configuration, and defines container health
+  checks.
 - `docs/deployment.md` documents Docker Compose and manual local run commands,
   durable TaskChampion storage, durable UI state, TOML configuration, health
   checks, and pairing with a separately hosted TaskChampion sync server.

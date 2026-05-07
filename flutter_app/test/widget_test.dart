@@ -50,8 +50,45 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byKey(const Key('desktop-navigation')), findsOneWidget);
     expect(find.byKey(const Key('desktop-context-panel')), findsOneWidget);
+  });
+
+  testWidgets('wide layout columns do not overlap', (tester) async {
+    tester.view.physicalSize = const Size(1400, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: _FakeBackendClient(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final rail = tester.getRect(
+      find.byKey(const Key('desktop-rail-column')),
+    );
+    final navigation = tester.getRect(
+      find.byKey(const Key('desktop-navigation')),
+    );
+    final main = tester.getRect(
+      find.byKey(const Key('desktop-main-column')),
+    );
+    final context = tester.getRect(
+      find.byKey(const Key('desktop-context-column')),
+    );
+    final contextPanel = tester.getRect(
+      find.byKey(const Key('desktop-context-panel')),
+    );
+
+    expect(navigation.left, greaterThanOrEqualTo(rail.left));
+    expect(navigation.right, lessThanOrEqualTo(rail.right));
+    expect(rail.right, lessThanOrEqualTo(main.left));
+    expect(main.right, lessThanOrEqualTo(context.left));
+    expect(context.right, tester.view.physicalSize.width);
+    expect(contextPanel.right, tester.view.physicalSize.width);
   });
 
   testWidgets('backend wiring loads health and task query data',
@@ -514,6 +551,31 @@ void main() {
     );
 
     expect(label.data, 'Replacement backend');
+  });
+
+  testWidgets('settings normalizes bare backend host to http', (tester) async {
+    final replacement = _FakeBackendClient(label: 'Replacement backend');
+    String? savedUrl;
+
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backendFactory: (_) => replacement,
+        saveBackendUrl: (baseUrl) async {
+          savedUrl = baseUrl;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('backend-url-field')),
+      '127.0.0.1:38180',
+    );
+    await tester.tap(find.byKey(const Key('backend-url-save')));
+    await tester.pumpAndSettle();
+
+    expect(replacement.healthChecks, 1);
+    expect(savedUrl, 'http://127.0.0.1:38180');
   });
 
   testWidgets('settings can change theme preference', (tester) async {

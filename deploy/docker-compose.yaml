@@ -6,11 +6,12 @@ services:
     command:
       - --config
       - /config/backend.toml
+    user: "${BACKEND_UID:-1000}:${BACKEND_GID:-1000}"
     ports:
       - "${BACKEND_HOST_PORT:-38180}:8080"
     volumes:
       - ./backend.compose.toml:/config/backend.toml:ro
-      - taskwarrior_backend_data:/data
+      - ./data:/data
     healthcheck:
       test:
         - CMD
@@ -41,6 +42,3 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
-
-volumes:
-  taskwarrior_backend_data:

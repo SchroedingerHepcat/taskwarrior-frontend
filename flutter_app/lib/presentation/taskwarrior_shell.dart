@@ -135,77 +135,196 @@ class _WideShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: NavigationRail(
-            selectedIndex: ShellSection.values.indexOf(currentSection),
-            extended: expanded,
-            destinations: ShellSection.values
-                .map(
-                  (section) => NavigationRailDestination(
-                    icon: Icon(section.icon),
-                    label: Text(section.label),
-                  ),
-                )
-                .toList(),
-            onDestinationSelected: (index) {
-              Navigator.of(context).pushReplacementNamed(
-                AppRoutes.pathFor(ShellSection.values[index]),
-              );
-            },
-            leading: Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .secondary
-                      .withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: const Padding(
-                  padding: EdgeInsets.all(14),
-                  child: Icon(Icons.track_changes_outlined),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final contextWidth =
+            expanded ? (constraints.maxWidth * 0.26).clamp(320.0, 400.0) : 0.0;
+        final railWidth = expanded ? 176.0 : 104.0;
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            SizedBox(
+              key: const Key('desktop-rail-column'),
+              width: railWidth,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: _DesktopNavigationRail(
+                  currentSection: currentSection,
+                  expanded: expanded,
                 ),
               ),
             ),
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  0,
+                  16,
+                  expanded ? 0 : 16,
+                  16,
+                ),
+                child: _MainShellColumn(
+                  controller: controller,
+                  currentSection: currentSection,
+                  showContext: expanded,
+                ),
+              ),
+            ),
+            if (expanded) ...<Widget>[
+              const SizedBox(width: 16),
+              SizedBox(
+                key: const Key('desktop-context-column'),
+                width: contextWidth,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 16, 0, 16),
+                  child: _ContextPanel(controller: controller),
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _DesktopNavigationRail extends StatelessWidget {
+  const _DesktopNavigationRail({
+    required this.currentSection,
+    required this.expanded,
+  });
+
+  final ShellSection currentSection;
+  final bool expanded;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      key: const Key('desktop-navigation'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Align(
+          alignment: expanded ? Alignment.centerLeft : Alignment.center,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Theme.of(context)
+                  .colorScheme
+                  .secondary
+                  .withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Padding(
+              padding: EdgeInsets.all(14),
+              child: Icon(Icons.track_changes_outlined),
+            ),
           ),
         ),
-        Expanded(
+        const SizedBox(height: 20),
+        for (final section in ShellSection.values)
+          _DesktopNavigationItem(
+            section: section,
+            selected: section == currentSection,
+            expanded: expanded,
+          ),
+      ],
+    );
+  }
+}
+
+class _DesktopNavigationItem extends StatelessWidget {
+  const _DesktopNavigationItem({
+    required this.section,
+    required this.selected,
+    required this.expanded,
+  });
+
+  final ShellSection section;
+  final bool selected;
+  final bool expanded;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final foreground = selected ? colorScheme.onSecondaryContainer : null;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Material(
+        color: selected
+            ? colorScheme.secondaryContainer.withValues(alpha: 0.44)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: () {
+            Navigator.of(context).pushReplacementNamed(
+              AppRoutes.pathFor(section),
+            );
+          },
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(0, 16, 16, 16),
+            padding: EdgeInsets.symmetric(
+              horizontal: expanded ? 12 : 0,
+              vertical: 10,
+            ),
             child: Row(
+              mainAxisAlignment:
+                  expanded ? MainAxisAlignment.start : MainAxisAlignment.center,
               children: <Widget>[
-                Expanded(
-                  flex: 3,
-                  child: Column(
-                    children: <Widget>[
-                      _ShellHeader(
-                        controller: controller,
-                        title: currentSection.label,
-                        subtitle: 'Landscape and portrait aware shell',
-                      ),
-                      const SizedBox(height: 16),
-                      Expanded(
-                        child: _SectionContent(
-                          controller: controller,
-                          currentSection: currentSection,
-                          showContext: expanded,
-                        ),
-                      ),
-                    ],
-                  ),
+                Icon(
+                  section.icon,
+                  color: foreground,
                 ),
                 if (expanded) ...<Widget>[
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: _ContextPanel(controller: controller),
+                    child: Text(
+                      section.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color: foreground,
+                            fontWeight:
+                                selected ? FontWeight.w700 : FontWeight.w600,
+                          ),
+                    ),
                   ),
                 ],
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MainShellColumn extends StatelessWidget {
+  const _MainShellColumn({
+    required this.controller,
+    required this.currentSection,
+    required this.showContext,
+  });
+
+  final ShellController controller;
+  final ShellSection currentSection;
+  final bool showContext;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      key: const Key('desktop-main-column'),
+      children: <Widget>[
+        _ShellHeader(
+          controller: controller,
+          title: currentSection.label,
+          subtitle: 'Landscape and portrait aware shell',
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: _SectionContent(
+            controller: controller,
+            currentSection: currentSection,
+            showContext: showContext,
           ),
         ),
       ],
@@ -348,6 +467,7 @@ class _ContextPanel extends StatelessWidget {
 
     return Card(
       key: const Key('desktop-context-panel'),
+      margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(

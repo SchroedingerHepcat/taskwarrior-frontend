@@ -1,10 +1,16 @@
 FROM ghcr.io/cirruslabs/flutter:stable AS build
 
+RUN chown -R ubuntu:ubuntu /sdks/flutter
+USER ubuntu
 WORKDIR /app/flutter_app
-COPY flutter_app/pubspec.yaml flutter_app/pubspec.lock ./
+COPY --chown=ubuntu:ubuntu flutter_app/pubspec.yaml flutter_app/pubspec.lock ./
 RUN flutter pub get
-COPY flutter_app .
-RUN flutter build web --release --no-wasm-dry-run
+COPY --chown=ubuntu:ubuntu flutter_app .
+RUN flutter build web \
+    --release \
+    --no-source-maps \
+    --no-wasm-dry-run \
+    --no-web-resources-cdn
 
 FROM nginx:1.27-alpine
 
