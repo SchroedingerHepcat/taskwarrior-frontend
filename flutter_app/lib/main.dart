@@ -11,15 +11,11 @@ export 'backend/local_dev_backend_client.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  const compileTimeBaseUrl = String.fromEnvironment('BACKEND_BASE_URL');
   final store = BackendConfigurationStore();
-  final savedBaseUrl = await store.loadBackendUrl();
+  final baseUrl = await store.loadBackendUrl();
   final themePreference = await store.loadThemePreference();
   final savedViews = await store.loadSavedViews();
   final dashboardLayout = await store.loadDashboardLayout();
-  final baseUrl = compileTimeBaseUrl.trim().isNotEmpty
-      ? compileTimeBaseUrl.trim()
-      : savedBaseUrl;
 
   runApp(
     TaskwarriorFrontendApp(

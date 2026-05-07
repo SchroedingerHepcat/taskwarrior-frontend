@@ -1,0 +1,11 @@
+.git
+.codex
+.dart_tool
+.idea
+.vscode
+**/build
+**/target
+flutter_app/.flutter-plugins
+flutter_app/.flutter-plugins-dependencies
+flutter_app/.packages
+flutter_app/android/.gradle

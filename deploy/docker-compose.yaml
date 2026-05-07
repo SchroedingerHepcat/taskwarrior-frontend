@@ -1,0 +1,46 @@
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/backend.Dockerfile
+    command:
+      - --config
+      - /config/backend.toml
+    ports:
+      - "${BACKEND_HOST_PORT:-38180}:8080"
+    volumes:
+      - ./backend.compose.toml:/config/backend.toml:ro
+      - taskwarrior_backend_data:/data
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -fsS
+        - http://127.0.0.1:8080/health
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+    ports:
+      - "${WEB_HOST_PORT:-38181}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - -qO-
+        - http://127.0.0.1/
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  taskwarrior_backend_data:

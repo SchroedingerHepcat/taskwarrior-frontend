@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use server::{BackendConfig, UiStateConfig};
 use std::fs;
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use taskwarrior_compat::{
     TaskChampionRemoteSyncConfig, TaskChampionStorageConfig,
@@ -14,11 +14,12 @@ async fn main() -> std::io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let file_config = load_file_config(&args)?;
     let port = configured_port(&args, &file_config);
+    let host = configured_host(&args, &file_config)?;
     let ui_state_path = configured_ui_state_path(&args, &file_config);
     let storage = configured_storage(&args, &file_config);
     let sync = configured_sync(&args, &file_config)?;
 
-    let address = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
+    let address = SocketAddr::from((host, port));
     server::start_server_with_config(
         address,
         BackendConfig {
@@ -32,6 +33,7 @@ async fn main() -> std::io::Result<()> {
 
 #[derive(Clone, Debug, Default, Deserialize)]
 struct FileConfig {
+    host: Option<String>,
     port: Option<u16>,
     ui: Option<UiFileConfig>,
     taskchampion: Option<TaskChampionFileConfig>,
@@ -85,6 +87,26 @@ fn configured_port(
         .and_then(|value| value.parse::<u16>().ok())
         .or(file.port)
         .unwrap_or(8080)
+}
+
+fn configured_host(
+    args: &[String],
+    file: &FileConfig,
+) -> std::io::Result<IpAddr> {
+    let raw = config_value(
+        args,
+        "--host",
+        "TASKWARRIOR_FRONTEND_HOST",
+        file.host.as_deref(),
+    )
+    .unwrap_or_else(|| Ipv4Addr::LOCALHOST.to_string());
+
+    raw.parse::<IpAddr>().map_err(|error| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("invalid backend host {raw}: {error}"),
+        )
+    })
 }
 
 fn configured_ui_state_path(
@@ -246,9 +268,11 @@ fn flag_enabled(
 #[cfg(test)]
 mod tests {
     use super::{
-        configured_port, configured_storage, configured_sync, load_file_config,
-        FileConfig, TaskChampionFileConfig, TaskChampionStorageFileConfig,
+        configured_host, configured_port, configured_storage, configured_sync,
+        load_file_config, FileConfig, TaskChampionFileConfig,
+        TaskChampionStorageFileConfig,
     };
+    use std::net::{IpAddr, Ipv4Addr};
     use std::path::PathBuf;
     use taskwarrior_compat::{
         TaskChampionStorageConfig, TaskChampionSyncConfig,
@@ -286,6 +310,7 @@ mod tests {
         std::fs::write(
             &path,
             r#"
+host = "0.0.0.0"
 port = 9090
 
 [taskchampion.storage]
@@ -307,6 +332,10 @@ allow_plain_http = true
         let file = load_file_config(&args).unwrap();
 
         assert_eq!(configured_port(&args, &file), 9090);
+        assert_eq!(
+            configured_host(&args, &file).unwrap(),
+            IpAddr::V4(Ipv4Addr::UNSPECIFIED)
+        );
         let sync = configured_sync(&args, &file).unwrap();
         let TaskChampionSyncConfig::Remote(config) = sync else {
             panic!("expected remote sync config");
@@ -344,6 +373,24 @@ allow_plain_http = true
             panic!("expected sqlite storage config");
         };
         assert_eq!(path.to_string_lossy(), "./cli.sqlite");
+    }
+
+    #[test]
+    fn parses_backend_host_configuration() {
+        let file = FileConfig {
+            host: Some("127.0.0.1".to_string()),
+            ..FileConfig::default()
+        };
+        let args = vec![
+            "server".to_string(),
+            "--host".to_string(),
+            "0.0.0.0".to_string(),
+        ];
+
+        assert_eq!(
+            configured_host(&args, &file).unwrap(),
+            IpAddr::V4(Ipv4Addr::UNSPECIFIED)
+        );
     }
 
     #[test]

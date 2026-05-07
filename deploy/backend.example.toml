@@ -7,22 +7,24 @@
 # CLI flags override environment variables, and environment variables override
 # this file.
 
+host = "127.0.0.1"
 port = 8080
 
 [ui]
 # Stores shared saved views and dashboard layouts. This is UI configuration,
 # not TaskChampion task data.
-state_path = "./taskwarrior-frontend-ui-state.json"
+state_path = "./data/taskwarrior-frontend-ui-state.json"
 
 [taskchampion.storage]
 # Stores this backend's TaskChampion replica data.
-path = "./taskchampion.sqlite"
+path = "./data/taskchampion.sqlite"
 
 [taskchampion.sync]
 # Use the URL of the TaskChampion sync server, not this app's HTTP API URL.
-url = "https://sync.example.com"
-client_id = "00000000-0000-0000-0000-000000000001"
-encryption_secret = "replace-me"
+# Leave these commented to run without external sync.
+# url = "https://sync.example.com"
+# client_id = "00000000-0000-0000-0000-000000000001"
+# encryption_secret = "replace-me"
 
 # Set true only for trusted local/plain-HTTP deployments.
 allow_plain_http = false

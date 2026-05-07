@@ -5,7 +5,7 @@ a first-class requirement.
 
 This repository currently contains the initial scaffold for:
 
-- a Rust workspace with core domain, compatibility, and server crates
+- a Rust workspace with task domain, compatibility, and server crates
 - a responsive Flutter client shell with Android, Linux, and web scaffolding
 - architecture, roadmap, and API boundary notes aligned to the current build
 
@@ -25,6 +25,8 @@ The server binary now defaults to SQLite TaskChampion storage at
 Backend settings can also be loaded from a TOML configuration file with
 `--config` or `TASKWARRIOR_FRONTEND_CONFIG`. CLI flags override environment
 variables, and environment variables override the configuration file.
+Set `--host` or `TASKWARRIOR_FRONTEND_HOST` when the backend must bind to an
+address other than `127.0.0.1`, such as `0.0.0.0` inside a container.
 
 The intended sync model is to let this backend act as a TaskChampion replica
 that can connect to a separately hosted TaskChampion sync server. This project
@@ -38,7 +40,7 @@ servers require `--taskchampion-allow-plain-http` or
 `TASKCHAMPION_ALLOW_PLAIN_HTTP=true`.
 
 See `deploy/backend.example.toml` for an example sectioned configuration
-file.
+file. See `docs/deployment.md` for the Docker Compose self-hosting path.
 
 The Flutter app currently includes responsive dashboard, list, board, and
 detail screens backed by that HTTP API. It now proves end-to-end create,
@@ -63,6 +65,6 @@ for existing tasks. Recurrence instance generation remains delegated to
 Taskwarrior or TaskChampion-compatible semantics, and the app does not spawn
 recurrence child tasks itself.
 
-The Flutter app stores the configured backend API URL locally. If no backend
-URL is provided at build time and no saved URL exists, the app starts on
-Settings and asks for the Rust backend API URL before loading task data.
+The Flutter app stores the configured backend API URL locally. If no saved URL
+exists, the app starts on Settings and asks for the Rust backend API URL before
+loading task data. Backend URLs are not baked into Flutter builds.

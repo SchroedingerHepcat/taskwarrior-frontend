@@ -132,7 +132,9 @@ setup concerns. The server binary accepts TaskChampion storage and sync
 configuration through CLI flags, environment variables, or a TOML
 configuration file. Precedence is CLI, then environment, then file, then
 defaults. The TOML file groups operator settings under `[ui]`,
-`[taskchampion.storage]`, and `[taskchampion.sync]`.
+`[taskchampion.storage]`, and `[taskchampion.sync]`. Backend bind address is
+also operator configuration through `--host`, `TASKWARRIOR_FRONTEND_HOST`, or
+the top-level TOML `host` field.
 
 ## Current Internal Service Boundaries
 
@@ -161,8 +163,9 @@ Flutter. It does not yet prove compatibility with a separately hosted remote
 TaskChampion sync server.
 
 Flutter stores the product backend API URL locally and can change it from the
-Settings screen. That setting is the URL of this Rust backend, not the
-TaskChampion sync server URL.
+Settings screen. The app does not require that URL to be baked into the build.
+That setting is the URL of this Rust backend, not the TaskChampion sync server
+URL.
 
 The Flutter task list exposes the current custom query fields directly:
 project and tag are selected from values returned by the backend task list,

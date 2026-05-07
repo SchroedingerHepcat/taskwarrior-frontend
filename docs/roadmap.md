@@ -311,6 +311,8 @@ board views, and advanced filtering.
 
 ## Milestone 6: Self-Hosted Deployment
 
+Status: in progress
+
 ### Goal
 
 Make the system practical to run as a self-hosted application with documented
@@ -369,6 +371,12 @@ deployment and basic operational controls.
   and environment overrides.
 - HTTP task reads and writes now perform configured TaskChampion sync at the
   backend boundary.
+- A minimal Docker Compose path now builds the Rust backend and Flutter web
+  client, uses durable backend volumes, avoids build-time backend URL
+  configuration, and defines container health checks.
+- `docs/deployment.md` documents Docker Compose and manual local run commands,
+  durable TaskChampion storage, durable UI state, TOML configuration, health
+  checks, and pairing with a separately hosted TaskChampion sync server.
 - Deployment packaging, migration, backup, and operational validation for
   durable TaskChampion storage remain open.
 - A real external TaskChampion sync-server deployment test remains open.

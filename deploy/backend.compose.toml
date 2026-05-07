@@ -1,0 +1,17 @@
+# Backend configuration used by deploy/docker-compose.yaml.
+
+host = "0.0.0.0"
+port = 8080
+
+[ui]
+state_path = "/data/taskwarrior-frontend-ui-state.json"
+
+[taskchampion.storage]
+path = "/data/taskchampion.sqlite"
+
+[taskchampion.sync]
+# Leave these commented to run without external sync.
+# url = "https://sync.example.com"
+# client_id = "00000000-0000-0000-0000-000000000001"
+# encryption_secret = "replace-me"
+allow_plain_http = false

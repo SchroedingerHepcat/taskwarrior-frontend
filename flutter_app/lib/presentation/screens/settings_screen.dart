@@ -82,7 +82,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           controller: _backendUrlController,
           decoration: const InputDecoration(
             labelText: 'Backend API URL',
-            hintText: 'http://127.0.0.1:8080',
+            hintText: 'http://127.0.0.1:38180',
           ),
           keyboardType: TextInputType.url,
           textInputAction: TextInputAction.done,

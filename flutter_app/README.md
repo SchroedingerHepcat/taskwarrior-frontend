@@ -17,6 +17,7 @@ Current scope:
 - recurrence controls for existing tasks that submit Taskwarrior-compatible
   properties without creating recurrence child tasks in Flutter
 - an HTTP backend client used by the application entry point
+- app-configured backend API URL persistence across restarts
 - a local development adapter retained for widget tests and local UI work
 
 This package keeps backend access behind a client boundary so screen logic
