@@ -91,6 +91,32 @@ void main() {
     expect(contextPanel.right, tester.view.physicalSize.width);
   });
 
+  testWidgets('wide layout scrolls navigation in short windows',
+      (tester) async {
+    tester.view.physicalSize = const Size(1114, 330);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: _FakeBackendClient(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final rail = tester.getRect(
+      find.byKey(const Key('desktop-rail-column')),
+    );
+    final navigation = tester.getRect(
+      find.byKey(const Key('desktop-navigation')),
+    );
+
+    expect(navigation.left, greaterThanOrEqualTo(rail.left));
+    expect(navigation.right, lessThanOrEqualTo(rail.right));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('backend wiring loads health and task query data',
       (tester) async {
     final backend = _FakeBackendClient();

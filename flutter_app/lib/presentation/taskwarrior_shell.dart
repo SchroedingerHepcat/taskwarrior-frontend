@@ -199,9 +199,10 @@ class _DesktopNavigationRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    final navigation = Column(
       key: const Key('desktop-navigation'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         Align(
           alignment: expanded ? Alignment.centerLeft : Alignment.center,
@@ -227,6 +228,10 @@ class _DesktopNavigationRail extends StatelessWidget {
             expanded: expanded,
           ),
       ],
+    );
+
+    return SingleChildScrollView(
+      child: navigation,
     );
   }
 }
