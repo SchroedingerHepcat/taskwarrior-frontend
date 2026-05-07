@@ -308,7 +308,8 @@ code and tests in this repository:
 - user-defined attributes outside the known property set
 - basic core status transitions for `end` and `modified`
 - basic dependency mapping between product-facing tasks and TaskChampion data
-- basic product-facing query filtering by status, tag, due, and waiting state
+- basic product-facing query filtering by status, tag, no-tags, due,
+  scheduled, and waiting ranges
 - GTD-shaped saved query presets for inbox, next actions, waiting, and review
 - product-facing filtering for project, no-project, waiting, scheduled, and
   blocked task state
@@ -332,6 +333,9 @@ code and tests in this repository:
   product-facing client operations rather than Taskwarrior storage concepts
 - full end-to-end create, update, complete, and query flows from Flutter to the
   Rust backend over HTTP
+- a frontend advanced filter panel that sends product-facing query fields,
+  including project, no-project, tag, no-tags, and date ranges, to the backend
+  instead of reimplementing Taskwarrior filtering in Flutter
 - an architectural decision to support an external TaskChampion sync server as
   the first-party task sync coordinator
 

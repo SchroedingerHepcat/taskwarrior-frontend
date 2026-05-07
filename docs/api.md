@@ -44,6 +44,7 @@ The current product-facing operations cover:
 - GTD-shaped saved query presets
 - board lane transitions for supported lanes
 - dashboard and list data backed by the same query surface
+- frontend-visible advanced list filtering for the current query fields
 
 The current query shape uses product-level fields rather than raw
 TaskChampion objects or file-oriented Taskwarrior concepts:
@@ -53,7 +54,10 @@ TaskChampion objects or file-oriented Taskwarrior concepts:
 - project
 - no-project flag
 - required tag
-- due-before cutoff
+- no-tags flag
+- due date range
+- scheduled date range
+- waiting date range
 - include-waiting flag
 - include-scheduled flag
 - include-blocked flag based on unresolved dependencies
@@ -114,6 +118,12 @@ Flutter stores the product backend API URL locally and can change it from the
 Settings screen. That setting is the URL of this Rust backend, not the
 TaskChampion sync server URL.
 
+The Flutter task list exposes the current custom query fields directly:
+project and tag are selected from values returned by the backend task list,
+with explicit no-project and no-tags choices. Due, scheduled, and waiting
+filters are represented as date ranges. The client builds product-facing query
+objects only; the backend remains authoritative for applying those filters.
+
 The internal TaskChampion sync configuration maps to the TaskChampion crate's
 sync client API:
 
@@ -153,7 +163,6 @@ sync client API:
 - offline write reconciliation
 - conflict behavior across synchronized replicas
 - pagination and list result shape
-- how advanced filtering and saved queries map onto product-facing query
-  objects
-- how recurring and scheduled task queries should be represented
+- how saved and user-customizable views map onto product-facing query objects
+- how recurring task queries should be represented
 - whether future protocols are needed beyond the current HTTP boundary

@@ -40,6 +40,7 @@ class ShellController extends ChangeNotifier {
   final Map<DashboardWidgetType, DashboardWidgetData> _dashboardWidgets =
       <DashboardWidgetType, DashboardWidgetData>{};
   TaskListMode _listMode = TaskListMode.all;
+  TaskListFilter _listFilter = const TaskListFilter();
   AppThemePreference _themePreference;
   String? _selectedTaskId;
   String? _boardIntent;
@@ -51,6 +52,7 @@ class ShellController extends ChangeNotifier {
   List<TaskItem> get allTasks => List.unmodifiable(_allTasks);
   List<TaskItem> get listTasks => List.unmodifiable(_listTasks);
   TaskListMode get listMode => _listMode;
+  TaskListFilter get listFilter => _listFilter;
   AppThemePreference get themePreference => _themePreference;
   String? get backendUrl => _backendUrl;
   Set<DashboardWidgetType> get enabledWidgets => Set.of(_enabledWidgets);
@@ -162,6 +164,21 @@ class ShellController extends ChangeNotifier {
 
   Future<void> setListMode(TaskListMode mode) async {
     _listMode = mode;
+    _listFilter = const TaskListFilter();
+    await _refreshTaskViews();
+    notifyListeners();
+  }
+
+  Future<void> setListFilter(TaskListFilter filter) async {
+    _listFilter = filter;
+    _listMode = TaskListMode.all;
+    await _refreshTaskViews();
+    notifyListeners();
+  }
+
+  Future<void> clearListFilter() async {
+    _listFilter = const TaskListFilter();
+    _listMode = TaskListMode.all;
     await _refreshTaskViews();
     notifyListeners();
   }
@@ -280,10 +297,12 @@ class ShellController extends ChangeNotifier {
       TaskQuery.all(referenceTime: referenceTime),
     );
     _listTasks = await backend.queryTasks(
-      TaskQuery.forListMode(
-        mode: _listMode,
-        referenceTime: referenceTime,
-      ),
+      _listFilter.isDefault
+          ? TaskQuery.forListMode(
+              mode: _listMode,
+              referenceTime: referenceTime,
+            )
+          : _listFilter.toQuery(referenceTime: referenceTime),
     );
 
     final selectedId = _selectedTaskId;

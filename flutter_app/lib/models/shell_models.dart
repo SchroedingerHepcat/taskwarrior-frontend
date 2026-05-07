@@ -86,6 +86,157 @@ enum TaskListMode {
   final String label;
 }
 
+class TaskListFilter {
+  const TaskListFilter({
+    this.preset = TaskQueryPreset.custom,
+    this.statuses = const <TaskStatus>[],
+    this.project,
+    this.noProject = false,
+    this.requiredTag,
+    this.noTags = false,
+    this.dueAfter,
+    this.dueBefore,
+    this.scheduledAfter,
+    this.scheduledBefore,
+    this.waitAfter,
+    this.waitBefore,
+    this.includeWaiting = true,
+    this.includeScheduled = true,
+    this.includeBlocked = true,
+    this.sort = TaskSort.dueAsc,
+  });
+
+  final TaskQueryPreset preset;
+  final List<TaskStatus> statuses;
+  final String? project;
+  final bool noProject;
+  final String? requiredTag;
+  final bool noTags;
+  final DateTime? dueAfter;
+  final DateTime? dueBefore;
+  final DateTime? scheduledAfter;
+  final DateTime? scheduledBefore;
+  final DateTime? waitAfter;
+  final DateTime? waitBefore;
+  final bool includeWaiting;
+  final bool includeScheduled;
+  final bool includeBlocked;
+  final TaskSort sort;
+
+  bool get isDefault {
+    return preset == TaskQueryPreset.custom &&
+        statuses.isEmpty &&
+        project == null &&
+        !noProject &&
+        requiredTag == null &&
+        !noTags &&
+        dueAfter == null &&
+        dueBefore == null &&
+        scheduledAfter == null &&
+        scheduledBefore == null &&
+        waitAfter == null &&
+        waitBefore == null &&
+        includeWaiting &&
+        includeScheduled &&
+        includeBlocked &&
+        sort == TaskSort.dueAsc;
+  }
+
+  TaskListFilter copyWith({
+    TaskQueryPreset? preset,
+    List<TaskStatus>? statuses,
+    String? project,
+    bool clearProject = false,
+    bool? noProject,
+    String? requiredTag,
+    bool clearRequiredTag = false,
+    bool? noTags,
+    DateTime? dueAfter,
+    bool clearDueAfter = false,
+    DateTime? dueBefore,
+    bool clearDueBefore = false,
+    DateTime? scheduledAfter,
+    bool clearScheduledAfter = false,
+    DateTime? scheduledBefore,
+    bool clearScheduledBefore = false,
+    DateTime? waitAfter,
+    bool clearWaitAfter = false,
+    DateTime? waitBefore,
+    bool clearWaitBefore = false,
+    bool? includeWaiting,
+    bool? includeScheduled,
+    bool? includeBlocked,
+    TaskSort? sort,
+  }) {
+    return TaskListFilter(
+      preset: preset ?? this.preset,
+      statuses: statuses ?? this.statuses,
+      project: clearProject ? null : project ?? this.project,
+      noProject: noProject ?? this.noProject,
+      requiredTag: clearRequiredTag ? null : requiredTag ?? this.requiredTag,
+      noTags: noTags ?? this.noTags,
+      dueAfter: clearDueAfter ? null : dueAfter ?? this.dueAfter,
+      dueBefore: clearDueBefore ? null : dueBefore ?? this.dueBefore,
+      scheduledAfter:
+          clearScheduledAfter ? null : scheduledAfter ?? this.scheduledAfter,
+      scheduledBefore:
+          clearScheduledBefore ? null : scheduledBefore ?? this.scheduledBefore,
+      waitAfter: clearWaitAfter ? null : waitAfter ?? this.waitAfter,
+      waitBefore: clearWaitBefore ? null : waitBefore ?? this.waitBefore,
+      includeWaiting: includeWaiting ?? this.includeWaiting,
+      includeScheduled: includeScheduled ?? this.includeScheduled,
+      includeBlocked: includeBlocked ?? this.includeBlocked,
+      sort: sort ?? this.sort,
+    );
+  }
+
+  TaskQuery toQuery({
+    required DateTime referenceTime,
+  }) {
+    if (preset != TaskQueryPreset.custom) {
+      return TaskQuery(
+        preset: preset,
+        statuses: const <TaskStatus>[],
+        project: null,
+        noProject: false,
+        requiredTag: null,
+        noTags: false,
+        dueAfter: null,
+        dueBefore: null,
+        scheduledAfter: null,
+        scheduledBefore: null,
+        waitAfter: null,
+        waitBefore: null,
+        includeWaiting: true,
+        includeScheduled: true,
+        includeBlocked: true,
+        referenceTime: referenceTime,
+        sort: sort,
+      );
+    }
+
+    return TaskQuery(
+      preset: TaskQueryPreset.custom,
+      statuses: statuses,
+      project: project,
+      noProject: noProject,
+      requiredTag: requiredTag,
+      noTags: noTags,
+      dueAfter: dueAfter,
+      dueBefore: dueBefore,
+      scheduledAfter: scheduledAfter,
+      scheduledBefore: scheduledBefore,
+      waitAfter: waitAfter,
+      waitBefore: waitBefore,
+      includeWaiting: includeWaiting,
+      includeScheduled: includeScheduled,
+      includeBlocked: includeBlocked,
+      referenceTime: referenceTime,
+      sort: sort,
+    );
+  }
+}
+
 enum DashboardWidgetType {
   readyNow('Ready now'),
   dueSoon('Due soon'),
@@ -132,8 +283,16 @@ class TaskQuery {
   const TaskQuery({
     required this.preset,
     required this.statuses,
+    required this.project,
+    required this.noProject,
     required this.requiredTag,
+    required this.noTags,
+    required this.dueAfter,
     required this.dueBefore,
+    required this.scheduledAfter,
+    required this.scheduledBefore,
+    required this.waitAfter,
+    required this.waitBefore,
     required this.includeWaiting,
     required this.includeScheduled,
     required this.includeBlocked,
@@ -143,8 +302,16 @@ class TaskQuery {
 
   final TaskQueryPreset preset;
   final List<TaskStatus> statuses;
+  final String? project;
+  final bool noProject;
   final String? requiredTag;
+  final bool noTags;
+  final DateTime? dueAfter;
   final DateTime? dueBefore;
+  final DateTime? scheduledAfter;
+  final DateTime? scheduledBefore;
+  final DateTime? waitAfter;
+  final DateTime? waitBefore;
   final bool includeWaiting;
   final bool includeScheduled;
   final bool includeBlocked;
@@ -157,8 +324,16 @@ class TaskQuery {
     return TaskQuery(
       preset: TaskQueryPreset.custom,
       statuses: const <TaskStatus>[],
+      project: null,
+      noProject: false,
       requiredTag: null,
+      noTags: false,
+      dueAfter: null,
       dueBefore: null,
+      scheduledAfter: null,
+      scheduledBefore: null,
+      waitAfter: null,
+      waitBefore: null,
       includeWaiting: true,
       includeScheduled: true,
       includeBlocked: true,
@@ -178,8 +353,16 @@ class TaskQuery {
         return TaskQuery(
           preset: TaskQueryPreset.custom,
           statuses: const <TaskStatus>[TaskStatus.completed],
+          project: null,
+          noProject: false,
           requiredTag: null,
+          noTags: false,
+          dueAfter: null,
           dueBefore: null,
+          scheduledAfter: null,
+          scheduledBefore: null,
+          waitAfter: null,
+          waitBefore: null,
           includeWaiting: true,
           includeScheduled: true,
           includeBlocked: true,
@@ -208,8 +391,16 @@ class TaskQuery {
         return TaskQuery(
           preset: TaskQueryPreset.custom,
           statuses: const <TaskStatus>[TaskStatus.pending],
+          project: null,
+          noProject: false,
           requiredTag: null,
+          noTags: false,
+          dueAfter: null,
           dueBefore: referenceTime.add(const Duration(days: 7)),
+          scheduledAfter: null,
+          scheduledBefore: null,
+          waitAfter: null,
+          waitBefore: null,
           includeWaiting: false,
           includeScheduled: false,
           includeBlocked: false,
@@ -220,8 +411,16 @@ class TaskQuery {
         return TaskQuery(
           preset: TaskQueryPreset.custom,
           statuses: const <TaskStatus>[TaskStatus.completed],
+          project: null,
+          noProject: false,
           requiredTag: null,
+          noTags: false,
+          dueAfter: null,
           dueBefore: null,
+          scheduledAfter: null,
+          scheduledBefore: null,
+          waitAfter: null,
+          waitBefore: null,
           includeWaiting: true,
           includeScheduled: true,
           includeBlocked: true,
@@ -237,8 +436,16 @@ class TaskQuery {
     return TaskQuery(
       preset: TaskQueryPreset.nextActions,
       statuses: const <TaskStatus>[TaskStatus.pending],
+      project: null,
+      noProject: false,
       requiredTag: null,
+      noTags: false,
+      dueAfter: null,
       dueBefore: null,
+      scheduledAfter: null,
+      scheduledBefore: null,
+      waitAfter: null,
+      waitBefore: null,
       includeWaiting: false,
       includeScheduled: false,
       includeBlocked: false,
@@ -253,8 +460,16 @@ class TaskQuery {
     return TaskQuery(
       preset: TaskQueryPreset.inbox,
       statuses: const <TaskStatus>[TaskStatus.pending],
+      project: null,
+      noProject: true,
       requiredTag: null,
+      noTags: false,
+      dueAfter: null,
       dueBefore: null,
+      scheduledAfter: null,
+      scheduledBefore: null,
+      waitAfter: null,
+      waitBefore: null,
       includeWaiting: false,
       includeScheduled: false,
       includeBlocked: true,
@@ -269,8 +484,16 @@ class TaskQuery {
     return TaskQuery(
       preset: TaskQueryPreset.waiting,
       statuses: const <TaskStatus>[TaskStatus.pending],
+      project: null,
+      noProject: false,
       requiredTag: null,
+      noTags: false,
+      dueAfter: null,
       dueBefore: null,
+      scheduledAfter: null,
+      scheduledBefore: null,
+      waitAfter: null,
+      waitBefore: null,
       includeWaiting: true,
       includeScheduled: true,
       includeBlocked: true,
@@ -285,8 +508,16 @@ class TaskQuery {
     return TaskQuery(
       preset: TaskQueryPreset.review,
       statuses: const <TaskStatus>[TaskStatus.pending],
+      project: null,
+      noProject: false,
       requiredTag: null,
+      noTags: false,
+      dueAfter: null,
       dueBefore: null,
+      scheduledAfter: null,
+      scheduledBefore: null,
+      waitAfter: null,
+      waitBefore: null,
       includeWaiting: true,
       includeScheduled: true,
       includeBlocked: true,
@@ -297,17 +528,38 @@ class TaskQuery {
 
   bool matches(TaskItem task) {
     final statusMatches = statuses.isEmpty || statuses.contains(task.status);
+    final projectMatches = project == null || task.project == project!.trim();
+    final noProjectMatches = !noProject || task.project == null;
     final tagMatches =
         requiredTag == null || task.tags.contains(requiredTag!.trim());
-    final dueMatches =
+    final noTagsMatches = !noTags || task.tags.isEmpty;
+    final dueAfterMatches =
+        dueAfter == null || task.due != null && !task.due!.isBefore(dueAfter!);
+    final dueBeforeMatches =
         dueBefore == null || task.due != null && !task.due!.isAfter(dueBefore!);
+    final scheduledAfterMatches = scheduledAfter == null ||
+        task.scheduled != null && !task.scheduled!.isBefore(scheduledAfter!);
+    final scheduledBeforeMatches = scheduledBefore == null ||
+        task.scheduled != null && !task.scheduled!.isAfter(scheduledBefore!);
+    final waitAfterMatches = waitAfter == null ||
+        task.waitUntil != null && !task.waitUntil!.isBefore(waitAfter!);
+    final waitBeforeMatches = waitBefore == null ||
+        task.waitUntil != null && !task.waitUntil!.isAfter(waitBefore!);
     final waitingMatches = includeWaiting || !task.isWaitingAt(referenceTime);
     final scheduledMatches =
         includeScheduled || !task.isScheduledAfter(referenceTime);
 
     return statusMatches &&
+        projectMatches &&
+        noProjectMatches &&
         tagMatches &&
-        dueMatches &&
+        noTagsMatches &&
+        dueAfterMatches &&
+        dueBeforeMatches &&
+        scheduledAfterMatches &&
+        scheduledBeforeMatches &&
+        waitAfterMatches &&
+        waitBeforeMatches &&
         waitingMatches &&
         scheduledMatches;
   }

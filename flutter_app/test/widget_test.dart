@@ -99,6 +99,11 @@ void main() {
   });
 
   testWidgets('task list groups active and completed tasks', (tester) async {
+    tester.view.physicalSize = const Size(1000, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(
       TaskwarriorFrontendApp(
         backend: _FakeBackendClient(),
@@ -109,8 +114,11 @@ void main() {
     await tester.tap(find.byIcon(ShellSection.tasks.icon));
     await tester.pumpAndSettle();
 
-    expect(find.text('To do'), findsOneWidget);
-    expect(find.text('Completed'), findsOneWidget);
+    expect(find.byKey(const Key('task-list-section-To do')), findsOneWidget);
+    expect(
+      find.byKey(const Key('task-list-section-Completed')),
+      findsOneWidget,
+    );
     expect(find.byKey(const Key('task-complete-task-1')), findsOneWidget);
 
     await tester.scrollUntilVisible(
@@ -123,6 +131,11 @@ void main() {
   });
 
   testWidgets('task list rows are compact until expanded', (tester) async {
+    tester.view.physicalSize = const Size(1000, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(
       TaskwarriorFrontendApp(
         backend: _FakeBackendClient(),
@@ -212,7 +225,94 @@ void main() {
     );
   });
 
+  testWidgets('task list advanced filters shape backend query', (tester) async {
+    tester.view.physicalSize = const Size(1000, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final backend = _FakeBackendClient();
+
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: backend,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(ShellSection.tasks.icon));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('advanced-filter-panel')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('filter-project-field')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Flutter').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('filter-tag-field')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('frontend').last);
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(
+      find.byKey(const Key('filter-due-after-text-field')),
+    );
+    await tester.enterText(
+      find.byKey(const Key('filter-due-after-text-field')),
+      '2026-4-13',
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    final query = backend.queries.last;
+    expect(query.preset, TaskQueryPreset.custom);
+    expect(query.project, 'Flutter');
+    expect(query.requiredTag, 'frontend');
+    expect(query.noProject, isFalse);
+    expect(query.noTags, isFalse);
+    expect(query.dueAfter, DateTime.utc(2026, 4, 13));
+    expect(query.includeWaiting, isTrue);
+    expect(find.byKey(const Key('filter-apply-button')), findsNothing);
+    expect(
+      find.byKey(const Key('filter-due-before-date-button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('filter-due-before-time-button')),
+      findsOneWidget,
+    );
+    expect(find.text('Task shell'), findsOneWidget);
+    expect(find.text('Recurring review'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('filter-clear-button')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('filter-project-field')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('No project').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('filter-tag-field')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('No tags').last);
+    await tester.pumpAndSettle();
+
+    final emptyMetadataQuery = backend.queries.last;
+    expect(emptyMetadataQuery.noProject, isTrue);
+    expect(emptyMetadataQuery.project, isNull);
+    expect(emptyMetadataQuery.noTags, isTrue);
+    expect(emptyMetadataQuery.requiredTag, isNull);
+    expect(find.text('No metadata task'), findsOneWidget);
+    expect(find.text('Task shell'), findsNothing);
+  });
+
   testWidgets('task list checkbox transitions completion', (tester) async {
+    tester.view.physicalSize = const Size(1000, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final backend = _FakeBackendClient();
 
     await tester.pumpWidget(
@@ -582,6 +682,7 @@ class _FakeBackendClient implements TaskBackendClient {
   final String label;
   int healthChecks = 0;
   int queryCalls = 0;
+  final List<TaskQuery> queries = <TaskQuery>[];
   final List<String> createdDescriptions = <String>[];
   final List<TaskStatus> transitionedStatuses = <TaskStatus>[];
   final List<String> updatedDescriptions = <String>[];
@@ -640,6 +741,7 @@ class _FakeBackendClient implements TaskBackendClient {
   @override
   Future<List<TaskItem>> queryTasks(TaskQuery query) async {
     queryCalls += 1;
+    queries.add(query);
 
     return _tasks.where(query.matches).toList();
   }

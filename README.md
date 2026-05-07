@@ -29,9 +29,12 @@ external TaskChampion sync server remains an explicit proof gap.
 The Flutter app currently includes responsive dashboard, list, board, and
 detail screens backed by that HTTP API. It now proves end-to-end create,
 update, complete, filtered list, saved GTD query, and board-lane transition
-flows against the Rust backend. Recurrence properties are preserved through
-the Taskwarrior-compatible model; recurrence instance generation remains
-delegated to Taskwarrior or TaskChampion-compatible semantics.
+flows against the Rust backend. The task list also exposes an advanced filter
+panel for backend-owned query fields such as workflow preset, project, tag,
+no-project, no-tags, date ranges, status, visibility flags, and sort order.
+Recurrence properties are preserved through the Taskwarrior-compatible model;
+recurrence instance generation remains delegated to Taskwarrior or
+TaskChampion-compatible semantics.
 
 The Flutter app stores the configured backend API URL locally. If no backend
 URL is provided at build time and no saved URL exists, the app starts on

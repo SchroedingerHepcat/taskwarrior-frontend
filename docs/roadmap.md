@@ -60,7 +60,7 @@ designing around direct task data files.
 
 ## Milestone 2: Backend API Scaffold
 
-Status: complete
+Status: in progress
 
 ### Goal
 
@@ -200,7 +200,7 @@ creation, editing, completion, and querying.
 
 ## Milestone 5: Taskwarrior Semantics, GTD, And Advanced Views
 
-Status: complete
+Status: in progress
 
 ### Goal
 
@@ -250,8 +250,13 @@ board views, and advanced filtering.
   compatibility layer, backend filters, and Flutter task models.
 - GTD support now includes backend-owned saved query presets for inbox, next
   actions, waiting, and review-shaped views.
-- Advanced filtering now includes project, no-project, tag, due cutoff,
-  waiting, scheduled, blocked, status, preset, and sort fields.
+- Advanced filtering now includes project, no-project, tag, no-tags, due
+  ranges, waiting ranges, scheduled ranges, blocked, status, preset, and sort
+  fields.
+- The Flutter advanced filter panel applies changes immediately, offers
+  project and tag dropdowns based on available backend task values, includes
+  no-project and no-tags options, and uses typeable date-range inputs with
+  picker buttons.
 - Board drag-and-drop now calls a product-facing backend board transition
   operation for pending, waiting, and completed lanes.
 - Platform-specific board polish remains part of Milestone 8.
@@ -261,8 +266,6 @@ board views, and advanced filtering.
 
 ### Remaining Work
 
-- Add a user-facing advanced filtering UI rather than only fixed presets and
-  backend query fields.
 - Add customizable task lists or saved views that can be created, edited,
   selected, and deleted from the Flutter client.
 - Persist saved list/view configuration across app restarts.
@@ -270,8 +273,12 @@ board views, and advanced filtering.
   fixed widget set.
 - Add tests proving saved views produce the expected backend query shape and
   survive restart.
+- Decide whether saved views are backend-owned resources or local client
+  preferences backed by product-facing query objects.
 - Clarify which recurrence behaviors are delegated to Taskwarrior or
   TaskChampion versus represented directly in this app.
+- Expand the current user-facing advanced filter panel into saved views and
+  dashboard-backed workflow configuration.
 
 ## Milestone 6: Self-Hosted Deployment
 

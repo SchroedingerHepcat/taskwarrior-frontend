@@ -217,7 +217,13 @@ pub struct TaskQuery {
     pub project: Option<String>,
     pub no_project: bool,
     pub required_tag: Option<String>,
+    pub no_tags: bool,
+    pub due_after: Option<DateTime<Utc>>,
     pub due_before: Option<DateTime<Utc>>,
+    pub scheduled_after: Option<DateTime<Utc>>,
+    pub scheduled_before: Option<DateTime<Utc>>,
+    pub wait_after: Option<DateTime<Utc>>,
+    pub wait_before: Option<DateTime<Utc>>,
     pub include_waiting: bool,
     pub include_scheduled: bool,
     pub include_blocked: bool,
@@ -233,7 +239,13 @@ impl TaskQuery {
             project: None,
             no_project: false,
             required_tag: None,
+            no_tags: false,
+            due_after: None,
             due_before: None,
+            scheduled_after: None,
+            scheduled_before: None,
+            wait_after: None,
+            wait_before: None,
             include_waiting: true,
             include_scheduled: true,
             include_blocked: true,
@@ -249,7 +261,13 @@ impl TaskQuery {
             project: None,
             no_project: false,
             required_tag: None,
+            no_tags: false,
+            due_after: None,
             due_before: None,
+            scheduled_after: None,
+            scheduled_before: None,
+            wait_after: None,
+            wait_before: None,
             include_waiting: false,
             include_scheduled: false,
             include_blocked: false,
@@ -265,7 +283,13 @@ impl TaskQuery {
             project: None,
             no_project: true,
             required_tag: None,
+            no_tags: false,
+            due_after: None,
             due_before: None,
+            scheduled_after: None,
+            scheduled_before: None,
+            wait_after: None,
+            wait_before: None,
             include_waiting: false,
             include_scheduled: false,
             include_blocked: true,
@@ -281,7 +305,13 @@ impl TaskQuery {
             project: None,
             no_project: false,
             required_tag: None,
+            no_tags: false,
+            due_after: None,
             due_before: None,
+            scheduled_after: None,
+            scheduled_before: None,
+            wait_after: None,
+            wait_before: None,
             include_waiting: true,
             include_scheduled: true,
             include_blocked: true,
@@ -297,7 +327,13 @@ impl TaskQuery {
             project: None,
             no_project: false,
             required_tag: None,
+            no_tags: false,
+            due_after: None,
             due_before: None,
+            scheduled_after: None,
+            scheduled_before: None,
+            wait_after: None,
+            wait_before: None,
             include_waiting: true,
             include_scheduled: true,
             include_blocked: true,
@@ -347,8 +383,30 @@ impl TaskQuery {
                 .required_tag
                 .as_ref()
                 .is_none_or(|tag| task.tags.contains(tag.trim()))
+            && (!self.no_tags || task.tags.is_empty())
+            && self.due_after.is_none_or(|due_after| {
+                task.due.is_some_and(|due| due >= due_after)
+            })
             && self.due_before.is_none_or(|due_before| {
                 task.due.is_some_and(|due| due <= due_before)
+            })
+            && self
+                .scheduled_after
+                .is_none_or(|scheduled_after| {
+                    task.scheduled
+                        .is_some_and(|scheduled| scheduled >= scheduled_after)
+                })
+            && self
+                .scheduled_before
+                .is_none_or(|scheduled_before| {
+                    task.scheduled
+                        .is_some_and(|scheduled| scheduled <= scheduled_before)
+                })
+            && self.wait_after.is_none_or(|wait_after| {
+                task.wait.is_some_and(|wait| wait >= wait_after)
+            })
+            && self.wait_before.is_none_or(|wait_before| {
+                task.wait.is_some_and(|wait| wait <= wait_before)
             })
             && (self.include_waiting
                 || !task.is_waiting_at(self.reference_time))
@@ -546,6 +604,7 @@ mod tests {
         let mut task = Task::new(Uuid::from_u128(40), "match me");
         task.add_tag("home");
         task.due = Some(timestamp(100));
+        task.scheduled = Some(timestamp(130));
         task.wait = Some(timestamp(150));
 
         let query = TaskQuery {
@@ -554,7 +613,13 @@ mod tests {
             project: None,
             no_project: false,
             required_tag: Some("home".to_string()),
+            no_tags: false,
+            due_after: Some(timestamp(90)),
             due_before: Some(timestamp(120)),
+            scheduled_after: Some(timestamp(125)),
+            scheduled_before: Some(timestamp(135)),
+            wait_after: Some(timestamp(145)),
+            wait_before: Some(timestamp(155)),
             include_waiting: false,
             include_scheduled: true,
             include_blocked: true,
@@ -570,6 +635,17 @@ mod tests {
         };
 
         assert!(visible_query.matches(&task));
+
+        let mut untagged = Task::new(Uuid::from_u128(43), "untagged");
+        let no_tags_query = TaskQuery {
+            required_tag: None,
+            no_tags: true,
+            ..TaskQuery::all(timestamp(1))
+        };
+
+        assert!(no_tags_query.matches(&untagged));
+        untagged.add_tag("home");
+        assert!(!no_tags_query.matches(&untagged));
     }
 
     #[test]
