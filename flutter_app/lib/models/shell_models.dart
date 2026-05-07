@@ -16,6 +16,10 @@ enum ShellSection {
   detail(
     label: 'Detail',
     icon: Icons.notes_outlined,
+  ),
+  settings(
+    label: 'Settings',
+    icon: Icons.tune_outlined,
   );
 
   const ShellSection({
@@ -59,7 +63,10 @@ enum TaskSort {
 
 enum TaskQueryPreset {
   custom('custom'),
-  nextActions('next_actions');
+  inbox('inbox'),
+  nextActions('next_actions'),
+  waiting('waiting'),
+  review('review');
 
   const TaskQueryPreset(this.apiValue);
 
@@ -68,7 +75,10 @@ enum TaskQueryPreset {
 
 enum TaskListMode {
   all('All'),
+  inbox('Inbox'),
   ready('Ready'),
+  waiting('Waiting'),
+  review('Review'),
   completed('Completed');
 
   const TaskListMode(this.label);
@@ -87,14 +97,15 @@ enum DashboardWidgetType {
 }
 
 enum BoardLane {
-  pending('Pending'),
-  recurring('Recurring'),
-  waiting('Waiting'),
-  completed('Completed');
+  pending('Pending', 'pending'),
+  recurring('Recurring', 'recurring'),
+  waiting('Waiting', 'waiting'),
+  completed('Completed', 'completed');
 
-  const BoardLane(this.title);
+  const BoardLane(this.title, this.apiValue);
 
   final String title;
+  final String apiValue;
 }
 
 class BackendHealth {
@@ -124,6 +135,7 @@ class TaskQuery {
     required this.requiredTag,
     required this.dueBefore,
     required this.includeWaiting,
+    required this.includeScheduled,
     required this.includeBlocked,
     required this.referenceTime,
     required this.sort,
@@ -134,6 +146,7 @@ class TaskQuery {
   final String? requiredTag;
   final DateTime? dueBefore;
   final bool includeWaiting;
+  final bool includeScheduled;
   final bool includeBlocked;
   final DateTime referenceTime;
   final TaskSort sort;
@@ -147,6 +160,7 @@ class TaskQuery {
       requiredTag: null,
       dueBefore: null,
       includeWaiting: true,
+      includeScheduled: true,
       includeBlocked: true,
       referenceTime: referenceTime,
       sort: TaskSort.dueAsc,
@@ -158,6 +172,8 @@ class TaskQuery {
     required DateTime referenceTime,
   }) {
     switch (mode) {
+      case TaskListMode.inbox:
+        return TaskQuery.inbox(referenceTime: referenceTime);
       case TaskListMode.completed:
         return TaskQuery(
           preset: TaskQueryPreset.custom,
@@ -165,12 +181,17 @@ class TaskQuery {
           requiredTag: null,
           dueBefore: null,
           includeWaiting: true,
+          includeScheduled: true,
           includeBlocked: true,
           referenceTime: referenceTime,
           sort: TaskSort.modifiedDesc,
         );
       case TaskListMode.ready:
         return TaskQuery.nextActions(referenceTime: referenceTime);
+      case TaskListMode.waiting:
+        return TaskQuery.waiting(referenceTime: referenceTime);
+      case TaskListMode.review:
+        return TaskQuery.review(referenceTime: referenceTime);
       case TaskListMode.all:
         return TaskQuery.all(referenceTime: referenceTime);
     }
@@ -190,6 +211,7 @@ class TaskQuery {
           requiredTag: null,
           dueBefore: referenceTime.add(const Duration(days: 7)),
           includeWaiting: false,
+          includeScheduled: false,
           includeBlocked: false,
           referenceTime: referenceTime,
           sort: TaskSort.dueAsc,
@@ -201,6 +223,7 @@ class TaskQuery {
           requiredTag: null,
           dueBefore: null,
           includeWaiting: true,
+          includeScheduled: true,
           includeBlocked: true,
           referenceTime: referenceTime,
           sort: TaskSort.modifiedDesc,
@@ -217,9 +240,58 @@ class TaskQuery {
       requiredTag: null,
       dueBefore: null,
       includeWaiting: false,
+      includeScheduled: false,
       includeBlocked: false,
       referenceTime: referenceTime,
       sort: TaskSort.dueAsc,
+    );
+  }
+
+  factory TaskQuery.inbox({
+    required DateTime referenceTime,
+  }) {
+    return TaskQuery(
+      preset: TaskQueryPreset.inbox,
+      statuses: const <TaskStatus>[TaskStatus.pending],
+      requiredTag: null,
+      dueBefore: null,
+      includeWaiting: false,
+      includeScheduled: false,
+      includeBlocked: true,
+      referenceTime: referenceTime,
+      sort: TaskSort.modifiedDesc,
+    );
+  }
+
+  factory TaskQuery.waiting({
+    required DateTime referenceTime,
+  }) {
+    return TaskQuery(
+      preset: TaskQueryPreset.waiting,
+      statuses: const <TaskStatus>[TaskStatus.pending],
+      requiredTag: null,
+      dueBefore: null,
+      includeWaiting: true,
+      includeScheduled: true,
+      includeBlocked: true,
+      referenceTime: referenceTime,
+      sort: TaskSort.dueAsc,
+    );
+  }
+
+  factory TaskQuery.review({
+    required DateTime referenceTime,
+  }) {
+    return TaskQuery(
+      preset: TaskQueryPreset.review,
+      statuses: const <TaskStatus>[TaskStatus.pending],
+      requiredTag: null,
+      dueBefore: null,
+      includeWaiting: true,
+      includeScheduled: true,
+      includeBlocked: true,
+      referenceTime: referenceTime,
+      sort: TaskSort.modifiedDesc,
     );
   }
 
@@ -230,8 +302,14 @@ class TaskQuery {
     final dueMatches =
         dueBefore == null || task.due != null && !task.due!.isAfter(dueBefore!);
     final waitingMatches = includeWaiting || !task.isWaitingAt(referenceTime);
+    final scheduledMatches =
+        includeScheduled || !task.isScheduledAfter(referenceTime);
 
-    return statusMatches && tagMatches && dueMatches && waitingMatches;
+    return statusMatches &&
+        tagMatches &&
+        dueMatches &&
+        waitingMatches &&
+        scheduledMatches;
   }
 }
 
@@ -261,6 +339,8 @@ class UpdateTaskInput {
     this.tags,
     this.due,
     this.clearDue = false,
+    this.scheduled,
+    this.clearScheduled = false,
     this.waitUntil,
     this.clearWait = false,
     this.addAnnotation,
@@ -272,6 +352,8 @@ class UpdateTaskInput {
   final List<String>? tags;
   final DateTime? due;
   final bool clearDue;
+  final DateTime? scheduled;
+  final bool clearScheduled;
   final DateTime? waitUntil;
   final bool clearWait;
   final String? addAnnotation;
@@ -285,6 +367,16 @@ class TaskTransitionInput {
   final TaskStatus status;
 }
 
+class BoardTransitionInput {
+  const BoardTransitionInput({
+    required this.lane,
+    this.waitUntil,
+  });
+
+  final BoardLane lane;
+  final DateTime? waitUntil;
+}
+
 class TaskItem {
   const TaskItem({
     required this.id,
@@ -296,6 +388,7 @@ class TaskItem {
     this.entry,
     this.modified,
     this.due,
+    this.scheduled,
     this.waitUntil,
     this.end,
   });
@@ -309,6 +402,7 @@ class TaskItem {
   final DateTime? entry;
   final DateTime? modified;
   final DateTime? due;
+  final DateTime? scheduled;
   final DateTime? waitUntil;
   final DateTime? end;
 
@@ -326,6 +420,10 @@ class TaskItem {
 
   bool isWaitingAt(DateTime referenceTime) {
     return waitUntil != null && waitUntil!.isAfter(referenceTime);
+  }
+
+  bool isScheduledAfter(DateTime referenceTime) {
+    return scheduled != null && scheduled!.isAfter(referenceTime);
   }
 
   BoardLane laneFor(DateTime referenceTime) {

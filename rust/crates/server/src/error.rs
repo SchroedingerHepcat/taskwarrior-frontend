@@ -9,7 +9,10 @@ pub enum ValidationError {
     EmptyAnnotation,
     MissingTaskChanges,
     EmptyRequiredTag,
+    EmptyProjectFilter,
+    EmptyRecurrence,
     UnknownStatusInput,
+    UnsupportedBoardLane,
     SelfDependency(Uuid),
 }
 

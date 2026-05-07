@@ -1,7 +1,7 @@
 use crate::ValidationError;
 use chrono::{DateTime, Utc};
 use std::collections::BTreeSet;
-use taskwarrior_core::{Annotation, Task, TaskStatus};
+use taskwarrior_core::{Annotation, Task, TaskRecurrence, TaskStatus};
 use uuid::Uuid;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -14,7 +14,18 @@ pub enum TaskSort {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TaskQueryPreset {
     Custom,
+    Inbox,
     NextActions,
+    Waiting,
+    Review,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BoardLaneTransition {
+    Pending,
+    Recurring,
+    Waiting,
+    Completed,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -42,8 +53,12 @@ pub struct UpdateTaskRequest {
     pub tags: Option<Vec<String>>,
     pub due: Option<DateTime<Utc>>,
     pub clear_due: bool,
+    pub scheduled: Option<DateTime<Utc>>,
+    pub clear_scheduled: bool,
     pub wait: Option<DateTime<Utc>>,
     pub clear_wait: bool,
+    pub recurrence: Option<TaskRecurrence>,
+    pub clear_recurrence: bool,
     pub add_annotation: Option<String>,
     pub modified_at: DateTime<Utc>,
 }
@@ -56,8 +71,12 @@ impl UpdateTaskRequest {
             && self.tags.is_none()
             && self.due.is_none()
             && !self.clear_due
+            && self.scheduled.is_none()
+            && !self.clear_scheduled
             && self.wait.is_none()
             && !self.clear_wait
+            && self.recurrence.is_none()
+            && !self.clear_recurrence
             && self.add_annotation.is_none()
         {
             return Err(ValidationError::MissingTaskChanges);
@@ -93,6 +112,14 @@ impl UpdateTaskRequest {
             }
         }
 
+        if self
+            .recurrence
+            .as_ref()
+            .is_some_and(|recurrence| recurrence.recur.trim().is_empty())
+        {
+            return Err(ValidationError::EmptyRecurrence);
+        }
+
         Ok(())
     }
 
@@ -120,10 +147,22 @@ impl UpdateTaskRequest {
             task.due = Some(due);
         }
 
+        if self.clear_scheduled {
+            task.scheduled = None;
+        } else if let Some(scheduled) = self.scheduled {
+            task.scheduled = Some(scheduled);
+        }
+
         if self.clear_wait {
             task.wait = None;
         } else if let Some(wait) = self.wait {
             task.wait = Some(wait);
+        }
+
+        if self.clear_recurrence {
+            task.recurrence = None;
+        } else if let Some(recurrence) = &self.recurrence {
+            task.recurrence = Some(recurrence.clone());
         }
 
         if let Some(note) = &self.add_annotation {
@@ -175,9 +214,12 @@ impl AddDependencyRequest {
 pub struct TaskQuery {
     pub preset: TaskQueryPreset,
     pub statuses: Vec<TaskStatus>,
+    pub project: Option<String>,
+    pub no_project: bool,
     pub required_tag: Option<String>,
     pub due_before: Option<DateTime<Utc>>,
     pub include_waiting: bool,
+    pub include_scheduled: bool,
     pub include_blocked: bool,
     pub reference_time: DateTime<Utc>,
     pub sort: TaskSort,
@@ -188,9 +230,12 @@ impl TaskQuery {
         Self {
             preset: TaskQueryPreset::Custom,
             statuses: Vec::new(),
+            project: None,
+            no_project: false,
             required_tag: None,
             due_before: None,
             include_waiting: true,
+            include_scheduled: true,
             include_blocked: true,
             reference_time,
             sort: TaskSort::DueAsc,
@@ -201,12 +246,63 @@ impl TaskQuery {
         Self {
             preset: TaskQueryPreset::NextActions,
             statuses: vec![TaskStatus::Pending],
+            project: None,
+            no_project: false,
             required_tag: None,
             due_before: None,
             include_waiting: false,
+            include_scheduled: false,
             include_blocked: false,
             reference_time,
             sort: TaskSort::DueAsc,
+        }
+    }
+
+    pub fn inbox(reference_time: DateTime<Utc>) -> Self {
+        Self {
+            preset: TaskQueryPreset::Inbox,
+            statuses: vec![TaskStatus::Pending],
+            project: None,
+            no_project: true,
+            required_tag: None,
+            due_before: None,
+            include_waiting: false,
+            include_scheduled: false,
+            include_blocked: true,
+            reference_time,
+            sort: TaskSort::ModifiedDesc,
+        }
+    }
+
+    pub fn waiting(reference_time: DateTime<Utc>) -> Self {
+        Self {
+            preset: TaskQueryPreset::Waiting,
+            statuses: vec![TaskStatus::Pending],
+            project: None,
+            no_project: false,
+            required_tag: None,
+            due_before: None,
+            include_waiting: true,
+            include_scheduled: true,
+            include_blocked: true,
+            reference_time,
+            sort: TaskSort::DueAsc,
+        }
+    }
+
+    pub fn review(reference_time: DateTime<Utc>) -> Self {
+        Self {
+            preset: TaskQueryPreset::Review,
+            statuses: vec![TaskStatus::Pending],
+            project: None,
+            no_project: false,
+            required_tag: None,
+            due_before: None,
+            include_waiting: true,
+            include_scheduled: true,
+            include_blocked: true,
+            reference_time,
+            sort: TaskSort::ModifiedDesc,
         }
     }
 
@@ -227,6 +323,14 @@ impl TaskQuery {
             return Err(ValidationError::EmptyRequiredTag);
         }
 
+        if self
+            .project
+            .as_ref()
+            .is_some_and(|project| project.trim().is_empty())
+        {
+            return Err(ValidationError::EmptyProjectFilter);
+        }
+
         Ok(())
     }
 
@@ -235,6 +339,10 @@ impl TaskQuery {
         task: &Task,
     ) -> bool {
         (self.statuses.is_empty() || self.statuses.contains(&task.status))
+            && self.project.as_ref().is_none_or(|project| {
+                task.project.as_deref() == Some(project.trim())
+            })
+            && (!self.no_project || task.project.is_none())
             && self
                 .required_tag
                 .as_ref()
@@ -244,6 +352,14 @@ impl TaskQuery {
             })
             && (self.include_waiting
                 || !task.is_waiting_at(self.reference_time))
+            && (self.include_scheduled
+                || !task.is_scheduled_after(self.reference_time))
+            && (self.preset != TaskQueryPreset::Waiting
+                || task.is_waiting_at(self.reference_time))
+            && (self.preset != TaskQueryPreset::Review
+                || task.modified.is_none_or(|modified| {
+                    modified <= self.reference_time - chrono::Duration::days(7)
+                }))
     }
 
     pub fn matches_with_completed_dependencies(
@@ -257,6 +373,46 @@ impl TaskQuery {
                     .dependencies
                     .iter()
                     .all(|dependency| completed.contains(dependency)))
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BoardTransitionRequest {
+    pub lane: BoardLaneTransition,
+    pub wait_until: Option<DateTime<Utc>>,
+    pub changed_at: DateTime<Utc>,
+}
+
+impl BoardTransitionRequest {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.lane == BoardLaneTransition::Recurring
+            || (self.lane == BoardLaneTransition::Waiting
+                && self.wait_until.is_none())
+        {
+            return Err(ValidationError::UnsupportedBoardLane);
+        }
+
+        Ok(())
+    }
+
+    pub fn apply_to(
+        &self,
+        task: &mut Task,
+    ) {
+        match self.lane {
+            BoardLaneTransition::Pending => {
+                task.transition_status(TaskStatus::Pending, self.changed_at);
+                task.wait = None;
+            }
+            BoardLaneTransition::Recurring => {}
+            BoardLaneTransition::Waiting => {
+                task.transition_status(TaskStatus::Pending, self.changed_at);
+                task.wait = self.wait_until;
+            }
+            BoardLaneTransition::Completed => {
+                task.transition_status(TaskStatus::Completed, self.changed_at);
+            }
+        }
     }
 }
 
@@ -305,8 +461,12 @@ mod tests {
             tags: None,
             due: None,
             clear_due: false,
+            scheduled: None,
+            clear_scheduled: false,
             wait: None,
             clear_wait: false,
+            recurrence: None,
+            clear_recurrence: false,
             add_annotation: None,
             modified_at: timestamp(10),
         };
@@ -330,8 +490,12 @@ mod tests {
             ]),
             due: Some(timestamp(20)),
             clear_due: false,
+            scheduled: Some(timestamp(25)),
+            clear_scheduled: false,
             wait: None,
             clear_wait: true,
+            recurrence: None,
+            clear_recurrence: false,
             add_annotation: Some("added note".to_string()),
             modified_at: timestamp(30),
         };
@@ -345,6 +509,7 @@ mod tests {
         );
         assert!(task.tags.contains("home"));
         assert_eq!(task.due, Some(timestamp(20)));
+        assert_eq!(task.scheduled, Some(timestamp(25)));
         assert_eq!(task.wait, None);
         assert_eq!(task.annotations.len(), 1);
         assert_eq!(task.modified, Some(timestamp(30)));
@@ -386,9 +551,12 @@ mod tests {
         let query = TaskQuery {
             preset: TaskQueryPreset::Custom,
             statuses: vec![TaskStatus::Pending],
+            project: None,
+            no_project: false,
             required_tag: Some("home".to_string()),
             due_before: Some(timestamp(120)),
             include_waiting: false,
+            include_scheduled: true,
             include_blocked: true,
             reference_time: timestamp(140),
             sort: TaskSort::DueAsc,
@@ -424,5 +592,21 @@ mod tests {
                 &BTreeSet::from([dependency]),
             )
         );
+    }
+
+    #[test]
+    fn saved_gtd_presets_match_inbox_waiting_and_review_tasks() {
+        let mut inbox = Task::new(Uuid::from_u128(50), "inbox");
+        inbox.modified = Some(timestamp(10));
+        let mut waiting = Task::new(Uuid::from_u128(51), "waiting");
+        waiting.wait = Some(timestamp(300));
+        let mut fresh = Task::new(Uuid::from_u128(52), "fresh");
+        fresh.modified = Some(timestamp(1_500_000));
+
+        assert!(TaskQuery::inbox(timestamp(2_000_000)).matches(&inbox));
+        assert!(!TaskQuery::next_actions(timestamp(200)).matches(&waiting));
+        assert!(TaskQuery::waiting(timestamp(200)).matches(&waiting));
+        assert!(TaskQuery::review(timestamp(2_000_000)).matches(&inbox));
+        assert!(!TaskQuery::review(timestamp(2_000_000)).matches(&fresh));
     }
 }

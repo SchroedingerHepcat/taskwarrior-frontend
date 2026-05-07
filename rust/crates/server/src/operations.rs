@@ -36,8 +36,10 @@ pub struct ApiTask {
     pub entry: Option<DateTime<Utc>>,
     pub modified: Option<DateTime<Utc>>,
     pub due: Option<DateTime<Utc>>,
+    pub scheduled: Option<DateTime<Utc>>,
     pub end: Option<DateTime<Utc>>,
     pub wait: Option<DateTime<Utc>>,
+    pub recurrence: Option<ApiRecurrence>,
     pub tags: Vec<String>,
     pub annotations: Vec<ApiAnnotation>,
 }
@@ -50,6 +52,16 @@ pub struct TaskResponse {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct TaskListResponse {
     pub tasks: Vec<ApiTask>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ApiRecurrence {
+    pub recur: String,
+    pub rtype: Option<String>,
+    pub until: Option<DateTime<Utc>>,
+    pub parent: Option<String>,
+    pub mask: Option<String>,
+    pub imask: Option<String>,
 }
 
 pub fn api_spec() -> &'static [ApiEndpoint] {
@@ -81,6 +93,11 @@ pub fn api_spec() -> &'static [ApiEndpoint] {
         },
         ApiEndpoint {
             method: ApiMethod::Post,
+            path: "/tasks/{id}/board-transition",
+            summary: "Move task between supported board lanes",
+        },
+        ApiEndpoint {
+            method: ApiMethod::Post,
             path: "/tasks/query",
             summary: "Query tasks",
         },
@@ -100,8 +117,17 @@ pub fn map_task(task: Task) -> ApiTask {
         entry: task.entry,
         modified: task.modified,
         due: task.due,
+        scheduled: task.scheduled,
         end: task.end,
         wait: task.wait,
+        recurrence: task.recurrence.map(|recurrence| ApiRecurrence {
+            recur: recurrence.recur,
+            rtype: recurrence.rtype,
+            until: recurrence.until,
+            parent: recurrence.parent.map(|parent| parent.to_string()),
+            mask: recurrence.mask,
+            imask: recurrence.imask,
+        }),
         tags: task.tags.into_iter().collect(),
         annotations: task
             .annotations
@@ -149,7 +175,7 @@ mod tests {
     fn api_spec_covers_health_and_task_operations() {
         let endpoints = api_spec();
 
-        assert_eq!(endpoints.len(), 6);
+        assert_eq!(endpoints.len(), 7);
         assert!(endpoints.contains(&super::ApiEndpoint {
             method: ApiMethod::Get,
             path: "/tasks/{id}",

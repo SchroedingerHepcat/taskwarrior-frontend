@@ -292,9 +292,16 @@ code and tests in this repository:
 - `entry`
 - `modified`
 - `due`
+- `scheduled`
 - `project`
 - `end`
 - `wait`
+- `recur`
+- `rtype`
+- `until`
+- `parent`
+- `mask`
+- `imask`
 - `annotation_*`
 - `tag_*`
 - `dep_*`
@@ -302,10 +309,12 @@ code and tests in this repository:
 - basic core status transitions for `end` and `modified`
 - basic dependency mapping between product-facing tasks and TaskChampion data
 - basic product-facing query filtering by status, tag, due, and waiting state
-- a first GTD-shaped `next_actions` query preset that excludes waiting tasks
-  and tasks blocked by incomplete dependencies
+- GTD-shaped saved query presets for inbox, next actions, waiting, and review
+- product-facing filtering for project, no-project, waiting, scheduled, and
+  blocked task state
 - product-facing sorting by due, modified, and description at the server
   boundary
+- board lane transitions for pending, waiting, and completed lanes
 - an HTTP backend path for create, get, update, transition, and query
   operations
 - request validation at the backend boundary for descriptions, project input,
@@ -328,11 +337,11 @@ code and tests in this repository:
 
 The following areas are still open and should not be treated as proven yet:
 
-- recurring task semantics beyond preserving the `recurring` status value
-- scheduled and waiting lifecycle rules beyond timestamp mapping and query
-  filtering
+- recurrence instance generation and child-task creation behavior
+- scheduled and waiting lifecycle behavior beyond timestamp mapping and
+  backend query filtering
 - dependency semantics beyond basic `dep_*` mapping, storage shape, and
-  unresolved-dependency filtering for `next_actions`
+  unresolved-dependency filtering
 - production deployment of durable TaskChampion storage, including migration,
   backup, and operational checks
 - sync conflict behavior, retry behavior, and user-facing sync state
@@ -340,7 +349,7 @@ The following areas are still open and should not be treated as proven yet:
   sync server
 - whether additional protocols are needed beyond the current HTTP boundary
 - task completion and deletion side effects beyond basic `end` timestamping
-  and `next_actions` dependency unblocking
+  and dependency unblocking in query presets
 - replica orchestration beyond the first local TaskChampion sync proof
 
 ## Main Risks In The Recommended Architecture

@@ -28,6 +28,10 @@ void main() {
     await tester.tap(find.byIcon(ShellSection.detail.icon));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('task-detail-screen')), findsOneWidget);
+
+    await tester.tap(find.byIcon(ShellSection.settings.icon));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('settings-screen')), findsOneWidget);
   });
 
   testWidgets('wide layout shows rail and context panel', (tester) async {
@@ -63,6 +67,83 @@ void main() {
     expect(find.text('Local development adapter ready'), findsOneWidget);
   });
 
+  testWidgets('settings can replace the backend server URL', (tester) async {
+    final initial = _FakeBackendClient(label: 'Initial backend');
+    final replacement = _FakeBackendClient(label: 'Replacement backend');
+    String? savedUrl;
+
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: initial,
+        initialBackendUrl: 'http://127.0.0.1:8080',
+        backendFactory: (_) => replacement,
+        saveBackendUrl: (baseUrl) async {
+          savedUrl = baseUrl;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(ShellSection.settings.icon));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('backend-url-field')),
+      'http://127.0.0.1:9090',
+    );
+    await tester.tap(find.byKey(const Key('backend-url-save')));
+    await tester.pumpAndSettle();
+
+    expect(initial.healthChecks, 1);
+    expect(replacement.healthChecks, 1);
+    expect(savedUrl, 'http://127.0.0.1:9090');
+    final label = tester.widget<Text>(
+      find.byKey(const Key('settings-connection-label')),
+    );
+
+    expect(label.data, 'Replacement backend');
+  });
+
+  testWidgets('app starts at settings when no backend is configured',
+      (tester) async {
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backendFactory: (_) => _FakeBackendClient(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('settings-screen')), findsOneWidget);
+    expect(find.byKey(const Key('backend-url-field')), findsOneWidget);
+    final label = tester.widget<Text>(
+      find.byKey(const Key('settings-connection-label')),
+    );
+
+    expect(label.data, 'Backend not configured');
+  });
+
+  testWidgets('settings remains available when backend is unavailable',
+      (tester) async {
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: _FailingBackendClient(),
+        initialBackendUrl: 'http://127.0.0.1:8080',
+        backendFactory: (_) => _FakeBackendClient(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Could not connect to http://127.0.0.1:8080'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byIcon(ShellSection.settings.icon));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('settings-screen')), findsOneWidget);
+    expect(find.byKey(const Key('backend-url-field')), findsOneWidget);
+  });
+
   test('ready list mode uses backend next-actions query preset', () {
     final query = TaskQuery.forListMode(
       mode: TaskListMode.ready,
@@ -76,7 +157,58 @@ void main() {
   });
 }
 
+class _FailingBackendClient implements TaskBackendClient {
+  @override
+  Future<BackendHealth> healthcheck() {
+    throw Exception('ClientException with SocketException: Connection refused');
+  }
+
+  @override
+  Future<TaskItem> createTask(CreateTaskInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<TaskItem> getTask(String taskId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<TaskItem>> queryTasks(TaskQuery query) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<TaskItem> transitionBoardLane(
+    String taskId,
+    BoardTransitionInput input,
+  ) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<TaskItem> transitionTask(
+    String taskId,
+    TaskTransitionInput input,
+  ) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<TaskItem> updateTask(
+    String taskId,
+    UpdateTaskInput input,
+  ) {
+    throw UnimplementedError();
+  }
+}
+
 class _FakeBackendClient implements TaskBackendClient {
+  _FakeBackendClient({
+    this.label = 'Local development adapter ready',
+  });
+
+  final String label;
   int healthChecks = 0;
   int queryCalls = 0;
   final List<TaskItem> _tasks = <TaskItem>[
@@ -108,8 +240,8 @@ class _FakeBackendClient implements TaskBackendClient {
   Future<BackendHealth> healthcheck() async {
     healthChecks += 1;
 
-    return const BackendHealth(
-      label: 'Local development adapter ready',
+    return BackendHealth(
+      label: label,
       environment: 'Backend scaffold mirror',
     );
   }
@@ -155,6 +287,7 @@ class _FakeBackendClient implements TaskBackendClient {
       tags: current.tags,
       annotations: current.annotations,
       due: current.due,
+      scheduled: current.scheduled,
       waitUntil: current.waitUntil,
       entry: current.entry,
       modified: DateTime.utc(2026, 4, 12),
@@ -181,10 +314,39 @@ class _FakeBackendClient implements TaskBackendClient {
       tags: input.tags ?? current.tags,
       annotations: current.annotations,
       due: input.clearDue ? null : input.due ?? current.due,
+      scheduled:
+          input.clearScheduled ? null : input.scheduled ?? current.scheduled,
       waitUntil: input.clearWait ? null : input.waitUntil ?? current.waitUntil,
       entry: current.entry,
       modified: DateTime.utc(2026, 4, 12),
       end: current.end,
+    );
+    _tasks[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<TaskItem> transitionBoardLane(
+    String taskId,
+    BoardTransitionInput input,
+  ) async {
+    final index = _tasks.indexWhere((task) => task.id == taskId);
+    final current = _tasks[index];
+    final updated = TaskItem(
+      id: current.id,
+      title: current.title,
+      project: current.project,
+      status: input.lane == BoardLane.completed
+          ? TaskStatus.completed
+          : current.status,
+      tags: current.tags,
+      annotations: current.annotations,
+      due: current.due,
+      scheduled: current.scheduled,
+      waitUntil: input.lane == BoardLane.waiting ? input.waitUntil : null,
+      entry: current.entry,
+      modified: DateTime.utc(2026, 4, 12),
+      end: input.lane == BoardLane.completed ? DateTime.utc(2026, 4, 12) : null,
     );
     _tasks[index] = updated;
     return updated;

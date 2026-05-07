@@ -1,12 +1,13 @@
 use crate::error::CompatibilityError;
 use crate::properties::{
     ANNOTATION_PREFIX, DEP_PREFIX, PROP_DESCRIPTION, PROP_DUE, PROP_END,
-    PROP_ENTRY, PROP_MODIFIED, PROP_PROJECT, PROP_STATUS, PROP_WAIT,
-    TAG_PREFIX,
+    PROP_ENTRY, PROP_IMASK, PROP_MASK, PROP_MODIFIED, PROP_PARENT,
+    PROP_PROJECT, PROP_RECUR, PROP_RTYPE, PROP_SCHEDULED, PROP_STATUS,
+    PROP_UNTIL, PROP_WAIT, TAG_PREFIX,
 };
 use taskchampion::chrono::{DateTime, TimeZone, Utc};
 use taskchampion::{Operations, TaskData};
-use taskwarrior_core::{Annotation, Task, TaskStatus};
+use taskwarrior_core::{Annotation, Task, TaskRecurrence, TaskStatus};
 
 #[derive(Debug)]
 pub struct EncodedTask {
@@ -26,8 +27,10 @@ pub fn decode_task(task_data: &TaskData) -> Result<Task, CompatibilityError> {
     task.entry = decode_timestamp(task_data, PROP_ENTRY)?;
     task.modified = decode_timestamp(task_data, PROP_MODIFIED)?;
     task.due = decode_timestamp(task_data, PROP_DUE)?;
+    task.scheduled = decode_timestamp(task_data, PROP_SCHEDULED)?;
     task.end = decode_timestamp(task_data, PROP_END)?;
     task.wait = decode_timestamp(task_data, PROP_WAIT)?;
+    task.recurrence = decode_recurrence(task_data)?;
 
     for (key, value) in task_data.iter() {
         if let Some(tag) = key.strip_prefix(TAG_PREFIX) {
@@ -99,6 +102,12 @@ pub fn encode_task(task: &Task) -> EncodedTask {
     );
     set_timestamp(
         &mut task_data,
+        PROP_SCHEDULED,
+        task.scheduled,
+        &mut operations,
+    );
+    set_timestamp(
+        &mut task_data,
         PROP_END,
         task.end,
         &mut operations,
@@ -107,6 +116,11 @@ pub fn encode_task(task: &Task) -> EncodedTask {
         &mut task_data,
         PROP_WAIT,
         task.wait,
+        &mut operations,
+    );
+    set_recurrence(
+        &mut task_data,
+        task.recurrence.as_ref(),
         &mut operations,
     );
 
@@ -172,6 +186,25 @@ fn encode_status(status: &TaskStatus) -> &str {
     }
 }
 
+fn decode_recurrence(
+    task_data: &TaskData
+) -> Result<Option<TaskRecurrence>, CompatibilityError> {
+    let Some(recur) = task_data.get(PROP_RECUR) else {
+        return Ok(None);
+    };
+
+    let mut recurrence = TaskRecurrence::new(recur);
+    recurrence.rtype = task_data.get(PROP_RTYPE).map(ToOwned::to_owned);
+    recurrence.until = decode_timestamp(task_data, PROP_UNTIL)?;
+    recurrence.parent = task_data
+        .get(PROP_PARENT)
+        .and_then(|raw| taskchampion::Uuid::parse_str(raw).ok());
+    recurrence.mask = task_data.get(PROP_MASK).map(ToOwned::to_owned);
+    recurrence.imask = task_data.get(PROP_IMASK).map(ToOwned::to_owned);
+
+    Ok(Some(recurrence))
+}
+
 fn decode_timestamp(
     task_data: &TaskData,
     property: &str,
@@ -204,6 +237,54 @@ fn parse_timestamp(
         )
 }
 
+fn set_recurrence(
+    task_data: &mut TaskData,
+    recurrence: Option<&TaskRecurrence>,
+    operations: &mut Operations,
+) {
+    let Some(recurrence) = recurrence else {
+        task_data.update(PROP_RECUR, None, operations);
+        task_data.update(PROP_RTYPE, None, operations);
+        task_data.update(PROP_UNTIL, None, operations);
+        task_data.update(PROP_PARENT, None, operations);
+        task_data.update(PROP_MASK, None, operations);
+        task_data.update(PROP_IMASK, None, operations);
+        return;
+    };
+
+    task_data.update(
+        PROP_RECUR,
+        Some(recurrence.recur.clone()),
+        operations,
+    );
+    task_data.update(
+        PROP_RTYPE,
+        recurrence.rtype.clone(),
+        operations,
+    );
+    set_timestamp(
+        task_data,
+        PROP_UNTIL,
+        recurrence.until,
+        operations,
+    );
+    task_data.update(
+        PROP_PARENT,
+        recurrence.parent.map(|parent| parent.to_string()),
+        operations,
+    );
+    task_data.update(
+        PROP_MASK,
+        recurrence.mask.clone(),
+        operations,
+    );
+    task_data.update(
+        PROP_IMASK,
+        recurrence.imask.clone(),
+        operations,
+    );
+}
+
 fn set_timestamp(
     task_data: &mut TaskData,
     property: &str,
@@ -226,8 +307,15 @@ fn is_known_property(key: &str) -> bool {
             | PROP_ENTRY
             | PROP_MODIFIED
             | PROP_DUE
+            | PROP_SCHEDULED
             | PROP_END
             | PROP_WAIT
+            | PROP_RECUR
+            | PROP_RTYPE
+            | PROP_UNTIL
+            | PROP_PARENT
+            | PROP_MASK
+            | PROP_IMASK
     ) || key.starts_with(ANNOTATION_PREFIX)
         || key.starts_with(TAG_PREFIX)
         || key.starts_with(DEP_PREFIX)
@@ -239,12 +327,13 @@ mod tests {
     use crate::error::CompatibilityError;
     use crate::properties::{
         ANNOTATION_PREFIX, DEP_PREFIX, PROP_DESCRIPTION, PROP_DUE, PROP_END,
-        PROP_ENTRY, PROP_MODIFIED, PROP_PROJECT, PROP_STATUS, PROP_WAIT,
-        TAG_PREFIX,
+        PROP_ENTRY, PROP_IMASK, PROP_MASK, PROP_MODIFIED, PROP_PARENT,
+        PROP_PROJECT, PROP_RECUR, PROP_RTYPE, PROP_SCHEDULED, PROP_STATUS,
+        PROP_UNTIL, PROP_WAIT, TAG_PREFIX,
     };
     use taskchampion::chrono::{DateTime, TimeZone, Utc};
     use taskchampion::{Operation, Operations, TaskData, Uuid};
-    use taskwarrior_core::{Annotation, Task, TaskStatus};
+    use taskwarrior_core::{Annotation, Task, TaskRecurrence, TaskStatus};
 
     fn timestamp(secs: i64) -> DateTime<Utc> {
         Utc.timestamp_opt(secs, 0).single().unwrap()
@@ -282,8 +371,18 @@ mod tests {
                 (PROP_ENTRY, "100"),
                 (PROP_MODIFIED, "150"),
                 (PROP_DUE, "175"),
+                (PROP_SCHEDULED, "180"),
                 (PROP_END, "190"),
                 (PROP_WAIT, "200"),
+                (PROP_RECUR, "weekly"),
+                (PROP_RTYPE, "periodic"),
+                (PROP_UNTIL, "500"),
+                (
+                    PROP_PARENT,
+                    "00000000-0000-0000-0000-00000000001e",
+                ),
+                (PROP_MASK, "1010101"),
+                (PROP_IMASK, "0101010"),
                 (
                     &format!("{ANNOTATION_PREFIX}150"),
                     "first note",
@@ -312,8 +411,20 @@ mod tests {
         assert_eq!(task.entry, Some(timestamp(100)));
         assert_eq!(task.modified, Some(timestamp(150)));
         assert_eq!(task.due, Some(timestamp(175)));
+        assert_eq!(task.scheduled, Some(timestamp(180)));
         assert_eq!(task.end, Some(timestamp(190)));
         assert_eq!(task.wait, Some(timestamp(200)));
+        assert_eq!(
+            task.recurrence,
+            Some(TaskRecurrence {
+                recur: "weekly".to_string(),
+                rtype: Some("periodic".to_string()),
+                until: Some(timestamp(500)),
+                parent: Some(Uuid::from_u128(30)),
+                mask: Some("1010101".to_string()),
+                imask: Some("0101010".to_string()),
+            }),
+        );
         assert!(task.dependencies.contains(&Uuid::from_u128(20)));
         assert_eq!(
             task.annotations,
@@ -381,8 +492,16 @@ mod tests {
         task.entry = Some(timestamp(100));
         task.modified = Some(timestamp(150));
         task.due = Some(timestamp(175));
+        task.scheduled = Some(timestamp(180));
         task.end = Some(timestamp(190));
         task.wait = Some(timestamp(200));
+        let mut recurrence = TaskRecurrence::new("2w");
+        recurrence.rtype = Some("chained".to_string());
+        recurrence.until = Some(timestamp(500));
+        recurrence.parent = Some(Uuid::from_u128(31));
+        recurrence.mask = Some("mask-value".to_string());
+        recurrence.imask = Some("imask-value".to_string());
+        task.recurrence = Some(recurrence);
         task.add_dependency(Uuid::from_u128(21));
         task.add_annotation(Annotation::new(timestamp(150), "done"));
         task.add_tag("work");
@@ -415,12 +534,40 @@ mod tests {
             Some("175")
         );
         assert_eq!(
+            encoded.task_data.get(PROP_SCHEDULED),
+            Some("180")
+        );
+        assert_eq!(
             encoded.task_data.get(PROP_END),
             Some("190")
         );
         assert_eq!(
             encoded.task_data.get(PROP_WAIT),
             Some("200")
+        );
+        assert_eq!(
+            encoded.task_data.get(PROP_RECUR),
+            Some("2w")
+        );
+        assert_eq!(
+            encoded.task_data.get(PROP_RTYPE),
+            Some("chained")
+        );
+        assert_eq!(
+            encoded.task_data.get(PROP_UNTIL),
+            Some("500")
+        );
+        assert_eq!(
+            encoded.task_data.get(PROP_PARENT),
+            Some("00000000-0000-0000-0000-00000000001f")
+        );
+        assert_eq!(
+            encoded.task_data.get(PROP_MASK),
+            Some("mask-value")
+        );
+        assert_eq!(
+            encoded.task_data.get(PROP_IMASK),
+            Some("imask-value")
         );
         assert_eq!(
             encoded.task_data.get(format!(
@@ -458,8 +605,10 @@ mod tests {
         task.entry = Some(timestamp(10));
         task.modified = Some(timestamp(11));
         task.due = Some(timestamp(12));
+        task.scheduled = Some(timestamp(12));
         task.end = Some(timestamp(13));
         task.wait = Some(timestamp(20));
+        task.recurrence = Some(TaskRecurrence::new("monthly"));
         task.add_dependency(Uuid::from_u128(22));
         task.add_annotation(Annotation::new(timestamp(15), "kept"));
         task.add_tag("home");

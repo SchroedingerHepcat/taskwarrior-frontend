@@ -31,6 +31,7 @@ The current HTTP surface covers:
 - `GET /tasks/{id}`
 - `PATCH /tasks/{id}`
 - `POST /tasks/{id}/transition`
+- `POST /tasks/{id}/board-transition`
 - `POST /tasks/query`
 
 The current product-facing operations cover:
@@ -40,25 +41,28 @@ The current product-facing operations cover:
 - task update
 - task status transition
 - task query, filtering, and sorting by product-facing fields
-- GTD-shaped `next_actions` query behavior
+- GTD-shaped saved query presets
+- board lane transitions for supported lanes
 - dashboard and list data backed by the same query surface
 
 The current query shape uses product-level fields rather than raw
 TaskChampion objects or file-oriented Taskwarrior concepts:
 
-- query preset, currently `custom` or `next_actions`
+- query preset: `custom`, `inbox`, `next_actions`, `waiting`, or `review`
 - statuses
+- project
+- no-project flag
 - required tag
 - due-before cutoff
 - include-waiting flag
+- include-scheduled flag
 - include-blocked flag based on unresolved dependencies
 - reference time for waiting-state evaluation
 - sort order
 
-The `next_actions` preset is the first GTD-shaped query. It returns pending
-tasks that are not waiting and are not blocked by incomplete dependencies.
-This is a backend semantic boundary; clients request the preset rather than
-reimplementing the dependency and waiting rules.
+The saved query presets are GTD-shaped backend semantics. Clients request the
+preset rather than reimplementing waiting, scheduled, stale-review, or
+dependency rules.
 
 The current update shape is still intentionally narrow:
 
@@ -67,10 +71,17 @@ The current update shape is still intentionally narrow:
 - tags replace
 - due timestamp update
 - due clear
+- scheduled timestamp update
+- scheduled clear
 - wait timestamp update
 - wait clear
+- recurrence property update
+- recurrence property clear
 - add annotation
 - explicit modified timestamp supplied by the caller
+
+Recurrence update currently preserves Taskwarrior-compatible recurrence
+properties. It does not expose a separate recurrence instance generator.
 
 The server still has an internal product-facing dependency operation, but that
 operation is not yet part of the current HTTP surface.
@@ -98,6 +109,10 @@ The server boundary now proves that local TaskChampion sync can move tasks
 between two backend replicas without exposing TaskChampion internals to
 Flutter. It does not yet prove compatibility with a separately hosted remote
 TaskChampion sync server.
+
+Flutter stores the product backend API URL locally and can change it from the
+Settings screen. That setting is the URL of this Rust backend, not the
+TaskChampion sync server URL.
 
 The internal TaskChampion sync configuration maps to the TaskChampion crate's
 sync client API:

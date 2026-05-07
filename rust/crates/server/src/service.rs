@@ -1,7 +1,7 @@
 use crate::error::ServiceError;
 use crate::requests::{
-    AddDependencyRequest, CreateTaskRequest, TaskQuery, TaskSort,
-    TransitionTaskRequest, UpdateTaskRequest,
+    AddDependencyRequest, BoardTransitionRequest, CreateTaskRequest, TaskQuery,
+    TaskSort, TransitionTaskRequest, UpdateTaskRequest,
 };
 use crate::storage::TaskRepository;
 use crate::sync::{
@@ -81,6 +81,19 @@ where
 
         let mut task = self.load(task_id).await?;
         task.transition_status(request.status, request.changed_at);
+
+        self.persist(task).await
+    }
+
+    pub async fn transition_board_lane(
+        &mut self,
+        task_id: Uuid,
+        request: BoardTransitionRequest,
+    ) -> Result<Task, ServiceError> {
+        request.validate()?;
+
+        let mut task = self.load(task_id).await?;
+        request.apply_to(&mut task);
 
         self.persist(task).await
     }
@@ -221,8 +234,9 @@ mod tests {
     use super::TaskService;
     use crate::error::{ServiceError, ValidationError};
     use crate::requests::{
-        AddDependencyRequest, CreateTaskRequest, TaskQuery, TaskQueryPreset,
-        TaskSort, TransitionTaskRequest, UpdateTaskRequest,
+        AddDependencyRequest, BoardLaneTransition, BoardTransitionRequest,
+        CreateTaskRequest, TaskQuery, TaskQueryPreset, TaskSort,
+        TransitionTaskRequest, UpdateTaskRequest,
     };
     use crate::storage::TaskChampionTaskRepository;
     use crate::sync::{InMemorySyncCoordinator, SyncStatus};
@@ -287,8 +301,12 @@ mod tests {
                     tags: Some(vec!["home".to_string()]),
                     due: Some(timestamp(200)),
                     clear_due: false,
+                    scheduled: None,
+                    clear_scheduled: false,
                     wait: None,
                     clear_wait: false,
+                    recurrence: None,
+                    clear_recurrence: false,
                     add_annotation: Some("first note".to_string()),
                     modified_at: timestamp(150),
                 },
@@ -311,9 +329,12 @@ mod tests {
             .query_tasks(&TaskQuery {
                 preset: TaskQueryPreset::Custom,
                 statuses: vec![TaskStatus::Completed],
+                project: None,
+                no_project: false,
                 required_tag: Some("home".to_string()),
                 due_before: Some(timestamp(250)),
                 include_waiting: true,
+                include_scheduled: true,
                 include_blocked: true,
                 reference_time: timestamp(400),
                 sort: TaskSort::DueAsc,
@@ -375,8 +396,12 @@ mod tests {
                     tags: Some(vec!["backend".to_string()]),
                     due: None,
                     clear_due: false,
+                    scheduled: None,
+                    clear_scheduled: false,
                     wait: None,
                     clear_wait: false,
+                    recurrence: None,
+                    clear_recurrence: false,
                     add_annotation: None,
                     modified_at: timestamp(150),
                 },
@@ -389,9 +414,12 @@ mod tests {
             .query_tasks(&TaskQuery {
                 preset: TaskQueryPreset::Custom,
                 statuses: vec![TaskStatus::Pending],
+                project: None,
+                no_project: false,
                 required_tag: Some("backend".to_string()),
                 due_before: None,
                 include_waiting: true,
+                include_scheduled: true,
                 include_blocked: true,
                 reference_time: timestamp(200),
                 sort: TaskSort::DescriptionAsc,
@@ -444,8 +472,12 @@ mod tests {
                     tags: None,
                     due: None,
                     clear_due: false,
+                    scheduled: None,
+                    clear_scheduled: false,
                     wait: Some(timestamp(300)),
                     clear_wait: false,
+                    recurrence: None,
+                    clear_recurrence: false,
                     add_annotation: None,
                     modified_at: timestamp(110),
                 },
@@ -489,6 +521,47 @@ mod tests {
         assert_eq!(unblocked.len(), 2);
         assert_eq!(unblocked[0].id, blocked_id);
         assert_eq!(unblocked[1].id, ready_id);
+    }
+
+    #[tokio::test]
+    async fn board_lane_transition_updates_supported_task_fields() {
+        let mut service = service();
+        let task_id = Uuid::from_u128(107);
+        service
+            .create_task(CreateTaskRequest {
+                id: task_id,
+                description: "Board card".to_string(),
+                created_at: timestamp(100),
+            })
+            .await
+            .unwrap();
+
+        let waiting = service
+            .transition_board_lane(
+                task_id,
+                BoardTransitionRequest {
+                    lane: BoardLaneTransition::Waiting,
+                    wait_until: Some(timestamp(300)),
+                    changed_at: timestamp(120),
+                },
+            )
+            .await
+            .unwrap();
+        let completed = service
+            .transition_board_lane(
+                task_id,
+                BoardTransitionRequest {
+                    lane: BoardLaneTransition::Completed,
+                    wait_until: None,
+                    changed_at: timestamp(140),
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(waiting.wait, Some(timestamp(300)));
+        assert_eq!(completed.status, TaskStatus::Completed);
+        assert_eq!(completed.end, Some(timestamp(140)));
     }
 
     #[tokio::test]

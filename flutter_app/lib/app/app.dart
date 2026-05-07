@@ -9,10 +9,16 @@ import 'shell_controller.dart';
 class TaskwarriorFrontendApp extends StatefulWidget {
   const TaskwarriorFrontendApp({
     super.key,
-    required this.backend,
+    this.backend,
+    this.initialBackendUrl,
+    this.backendFactory,
+    this.saveBackendUrl,
   });
 
-  final TaskBackendClient backend;
+  final TaskBackendClient? backend;
+  final String? initialBackendUrl;
+  final TaskBackendClient Function(String baseUrl)? backendFactory;
+  final Future<void> Function(String baseUrl)? saveBackendUrl;
 
   @override
   State<TaskwarriorFrontendApp> createState() => _TaskwarriorFrontendAppState();
@@ -24,7 +30,12 @@ class _TaskwarriorFrontendAppState extends State<TaskwarriorFrontendApp> {
   @override
   void initState() {
     super.initState();
-    _controller = ShellController(backend: widget.backend)..load();
+    _controller = ShellController(
+      backend: widget.backend,
+      backendUrl: widget.initialBackendUrl,
+      backendFactory: widget.backendFactory,
+      saveBackendUrl: widget.saveBackendUrl,
+    )..load();
   }
 
   @override
@@ -39,7 +50,8 @@ class _TaskwarriorFrontendAppState extends State<TaskwarriorFrontendApp> {
       title: 'Taskwarrior Frontend',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
-      initialRoute: AppRoutes.dashboard,
+      initialRoute:
+          widget.backend == null ? AppRoutes.settings : AppRoutes.dashboard,
       onGenerateRoute: (settings) {
         final section = AppRoutes.sectionFor(settings.name);
 

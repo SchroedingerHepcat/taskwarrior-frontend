@@ -5,6 +5,7 @@ import '../app/shell_controller.dart';
 import '../models/shell_models.dart';
 import 'screens/board_screen.dart';
 import 'screens/dashboard_screen.dart';
+import 'screens/settings_screen.dart';
 import 'screens/task_detail_screen.dart';
 import 'screens/task_list_screen.dart';
 
@@ -282,6 +283,10 @@ class _SectionContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (currentSection == ShellSection.settings) {
+      return SettingsScreen(controller: controller);
+    }
+
     if (controller.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -317,13 +322,15 @@ class _SectionContent extends StatelessWidget {
         return BoardScreen(
           tasks: controller.allTasks,
           onOpenTask: controller.selectTask,
-          onQueueMove: controller.recordBoardIntent,
+          onQueueMove: controller.moveTaskToBoardLane,
         );
       case ShellSection.detail:
         return TaskDetailScreen(
           controller: controller,
           showContextHeader: !showContext,
         );
+      case ShellSection.settings:
+        return SettingsScreen(controller: controller);
     }
   }
 }

@@ -18,4 +18,9 @@ abstract interface class TaskBackendClient {
     String taskId,
     TaskTransitionInput input,
   );
+
+  Future<TaskItem> transitionBoardLane(
+    String taskId,
+    BoardTransitionInput input,
+  );
 }

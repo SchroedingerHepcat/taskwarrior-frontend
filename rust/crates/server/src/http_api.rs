@@ -5,8 +5,8 @@ use crate::operations::{
     TaskListResponse, TaskResponse,
 };
 use crate::requests::{
-    CreateTaskRequest, TaskQuery, TaskQueryPreset, TaskSort,
-    TransitionTaskRequest, UpdateTaskRequest,
+    BoardLaneTransition, BoardTransitionRequest, CreateTaskRequest, TaskQuery,
+    TaskQueryPreset, TaskSort, TransitionTaskRequest, UpdateTaskRequest,
 };
 use crate::service::TaskService;
 use crate::storage::TaskChampionTaskRepository;
@@ -78,10 +78,24 @@ pub struct HttpUpdateTaskRequest {
     pub tags: Option<Vec<String>>,
     pub due: Option<String>,
     pub clear_due: Option<bool>,
+    pub scheduled: Option<String>,
+    pub clear_scheduled: Option<bool>,
     pub wait: Option<String>,
     pub clear_wait: Option<bool>,
+    pub recurrence: Option<HttpRecurrence>,
+    pub clear_recurrence: Option<bool>,
     pub add_annotation: Option<String>,
     pub modified_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct HttpRecurrence {
+    pub recur: String,
+    pub rtype: Option<String>,
+    pub until: Option<String>,
+    pub parent: Option<String>,
+    pub mask: Option<String>,
+    pub imask: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -91,12 +105,22 @@ pub struct HttpTransitionTaskRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct HttpBoardTransitionRequest {
+    pub lane: String,
+    pub wait_until: Option<String>,
+    pub changed_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct HttpTaskQueryRequest {
     pub preset: Option<String>,
     pub statuses: Option<Vec<String>>,
+    pub project: Option<String>,
+    pub no_project: Option<bool>,
     pub required_tag: Option<String>,
     pub due_before: Option<String>,
     pub include_waiting: Option<bool>,
+    pub include_scheduled: Option<bool>,
     pub include_blocked: Option<bool>,
     pub reference_time: Option<String>,
     pub sort: Option<String>,
@@ -122,6 +146,10 @@ pub fn build_router_with_state(state: AppState) -> Router {
         .route(
             "/tasks/{id}/transition",
             post(transition_task),
+        )
+        .route(
+            "/tasks/{id}/board-transition",
+            post(transition_board_lane),
         )
         .route("/tasks/query", post(query_tasks))
         .layer(
@@ -194,14 +222,40 @@ async fn update_task(
         tags: request.tags,
         due: parse_optional_datetime(request.due)?,
         clear_due: request.clear_due.unwrap_or(false),
+        scheduled: parse_optional_datetime(request.scheduled)?,
+        clear_scheduled: request.clear_scheduled.unwrap_or(false),
         wait: parse_optional_datetime(request.wait)?,
         clear_wait: request.clear_wait.unwrap_or(false),
+        recurrence: parse_recurrence(request.recurrence)?,
+        clear_recurrence: request.clear_recurrence.unwrap_or(false),
         add_annotation: request.add_annotation,
         modified_at: parse_datetime_or_now(request.modified_at)?,
     };
     let mut service = state.service.lock().await;
     let task = service
         .update_task(task_id, request)
+        .await
+        .map_err(ServiceHttpError)?;
+
+    Ok(Json(TaskResponse {
+        task: map_task(task),
+    }))
+}
+
+async fn transition_board_lane(
+    State(state): State<AppState>,
+    Path(task_id): Path<String>,
+    Json(request): Json<HttpBoardTransitionRequest>,
+) -> Result<Json<TaskResponse>, ServiceHttpError> {
+    let task_id = parse_uuid(&task_id)?;
+    let request = BoardTransitionRequest {
+        lane: parse_board_lane(&request.lane),
+        wait_until: parse_optional_datetime(request.wait_until)?,
+        changed_at: parse_datetime_or_now(request.changed_at)?,
+    };
+    let mut service = state.service.lock().await;
+    let task = service
+        .transition_board_lane(task_id, request)
         .await
         .map_err(ServiceHttpError)?;
 
@@ -256,10 +310,19 @@ fn build_task_query(
     request: HttpTaskQueryRequest,
     reference_time: DateTime<Utc>,
 ) -> Result<TaskQuery, ServiceHttpError> {
-    if parse_query_preset(request.preset.as_deref())
-        == TaskQueryPreset::NextActions
+    if parse_query_preset(request.preset.as_deref()) != TaskQueryPreset::Custom
     {
-        return Ok(TaskQuery::next_actions(reference_time));
+        return Ok(
+            match parse_query_preset(request.preset.as_deref()) {
+                TaskQueryPreset::Inbox => TaskQuery::inbox(reference_time),
+                TaskQueryPreset::NextActions => {
+                    TaskQuery::next_actions(reference_time)
+                }
+                TaskQueryPreset::Waiting => TaskQuery::waiting(reference_time),
+                TaskQueryPreset::Review => TaskQuery::review(reference_time),
+                TaskQueryPreset::Custom => TaskQuery::all(reference_time),
+            },
+        );
     }
 
     Ok(TaskQuery {
@@ -270,9 +333,12 @@ fn build_task_query(
             .into_iter()
             .map(|status| parse_status(&status))
             .collect(),
+        project: request.project,
+        no_project: request.no_project.unwrap_or(false),
         required_tag: request.required_tag,
         due_before: parse_optional_datetime(request.due_before)?,
         include_waiting: request.include_waiting.unwrap_or(true),
+        include_scheduled: request.include_scheduled.unwrap_or(true),
         include_blocked: request.include_blocked.unwrap_or(true),
         reference_time,
         sort: parse_sort(request.sort.as_deref()),
@@ -281,9 +347,42 @@ fn build_task_query(
 
 fn parse_query_preset(raw: Option<&str>) -> TaskQueryPreset {
     match raw.unwrap_or("custom") {
+        "inbox" => TaskQueryPreset::Inbox,
         "next_actions" => TaskQueryPreset::NextActions,
+        "waiting" => TaskQueryPreset::Waiting,
+        "review" => TaskQueryPreset::Review,
         _ => TaskQueryPreset::Custom,
     }
+}
+
+fn parse_board_lane(raw: &str) -> BoardLaneTransition {
+    match raw {
+        "pending" => BoardLaneTransition::Pending,
+        "recurring" => BoardLaneTransition::Recurring,
+        "waiting" => BoardLaneTransition::Waiting,
+        "completed" => BoardLaneTransition::Completed,
+        _ => BoardLaneTransition::Pending,
+    }
+}
+
+fn parse_recurrence(
+    raw: Option<HttpRecurrence>
+) -> Result<Option<taskwarrior_core::TaskRecurrence>, ServiceHttpError> {
+    raw.map(|recurrence| {
+        let mut parsed =
+            taskwarrior_core::TaskRecurrence::new(recurrence.recur);
+        parsed.rtype = recurrence.rtype;
+        parsed.until = parse_optional_datetime(recurrence.until)?;
+        parsed.parent = recurrence
+            .parent
+            .map(|parent| parse_uuid(&parent))
+            .transpose()?;
+        parsed.mask = recurrence.mask;
+        parsed.imask = recurrence.imask;
+
+        Ok(parsed)
+    })
+    .transpose()
 }
 
 fn parse_uuid(raw: &str) -> Result<Uuid, ServiceHttpError> {

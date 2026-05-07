@@ -5,6 +5,7 @@ abstract final class AppRoutes {
   static const tasks = '/tasks';
   static const board = '/board';
   static const detail = '/detail';
+  static const settings = '/settings';
 
   static String pathFor(ShellSection section) {
     switch (section) {
@@ -16,6 +17,8 @@ abstract final class AppRoutes {
         return board;
       case ShellSection.detail:
         return detail;
+      case ShellSection.settings:
+        return settings;
     }
   }
 
@@ -27,6 +30,8 @@ abstract final class AppRoutes {
         return ShellSection.board;
       case detail:
         return ShellSection.detail;
+      case settings:
+        return ShellSection.settings;
       case dashboard:
       default:
         return ShellSection.dashboard;

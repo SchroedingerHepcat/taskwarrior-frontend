@@ -1,4 +1,4 @@
-use crate::Annotation;
+use crate::{Annotation, TaskRecurrence};
 use chrono::{DateTime, Utc};
 use std::collections::{BTreeMap, BTreeSet};
 use uuid::Uuid;
@@ -27,8 +27,10 @@ pub struct Task {
     pub entry: Option<DateTime<Utc>>,
     pub modified: Option<DateTime<Utc>>,
     pub due: Option<DateTime<Utc>>,
+    pub scheduled: Option<DateTime<Utc>>,
     pub end: Option<DateTime<Utc>>,
     pub wait: Option<DateTime<Utc>>,
+    pub recurrence: Option<TaskRecurrence>,
     pub dependencies: BTreeSet<Uuid>,
     pub annotations: Vec<Annotation>,
     pub tags: BTreeSet<String>,
@@ -48,8 +50,10 @@ impl Task {
             entry: None,
             modified: None,
             due: None,
+            scheduled: None,
             end: None,
             wait: None,
+            recurrence: None,
             dependencies: BTreeSet::new(),
             annotations: Vec::new(),
             tags: BTreeSet::new(),
@@ -62,6 +66,14 @@ impl Task {
         now: DateTime<Utc>,
     ) -> bool {
         self.wait.is_some_and(|wait| wait > now)
+    }
+
+    pub fn is_scheduled_after(
+        &self,
+        now: DateTime<Utc>,
+    ) -> bool {
+        self.scheduled
+            .is_some_and(|scheduled| scheduled > now)
     }
 
     pub fn transition_status(
@@ -151,8 +163,10 @@ mod tests {
         assert_eq!(task.entry, None);
         assert_eq!(task.modified, None);
         assert_eq!(task.due, None);
+        assert_eq!(task.scheduled, None);
         assert_eq!(task.end, None);
         assert_eq!(task.wait, None);
+        assert_eq!(task.recurrence, None);
         assert_eq!(task.dependencies, BTreeSet::new());
         assert_eq!(task.annotations, Vec::new());
         assert_eq!(task.tags, BTreeSet::new());
@@ -167,10 +181,12 @@ mod tests {
         let mut task = Task::new(Uuid::from_u128(5), "Date test");
         task.modified = Some(timestamp(100));
         task.due = Some(timestamp(200));
+        task.scheduled = Some(timestamp(150));
         task.set_project(Some("ops"));
 
         assert_eq!(task.modified, Some(timestamp(100)));
         assert_eq!(task.due, Some(timestamp(200)));
+        assert_eq!(task.scheduled, Some(timestamp(150)));
         assert_eq!(task.project, Some("ops".to_string()));
         assert_eq!(task.end, None);
         assert_eq!(task.wait, None);
@@ -235,6 +251,16 @@ mod tests {
         assert!(task.is_waiting_at(timestamp(100)));
         assert!(!task.is_waiting_at(timestamp(200)));
         assert!(!task.is_waiting_at(timestamp(300)));
+    }
+
+    #[test]
+    fn scheduled_state_is_based_on_scheduled_timestamp() {
+        let mut task = Task::new(Uuid::from_u128(12), "Scheduled test");
+        task.scheduled = Some(timestamp(200));
+
+        assert!(task.is_scheduled_after(timestamp(100)));
+        assert!(!task.is_scheduled_after(timestamp(200)));
+        assert!(!task.is_scheduled_after(timestamp(300)));
     }
 
     #[test]

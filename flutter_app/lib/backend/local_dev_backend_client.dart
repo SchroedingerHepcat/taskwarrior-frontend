@@ -72,6 +72,7 @@ class LocalDevelopmentBackendClient implements TaskBackendClient {
       entry: current.entry,
       modified: DateTime.now().toUtc(),
       due: current.due,
+      scheduled: current.scheduled,
       waitUntil: current.waitUntil,
       end: input.status == TaskStatus.completed ? DateTime.now().toUtc() : null,
     );
@@ -108,8 +109,40 @@ class LocalDevelopmentBackendClient implements TaskBackendClient {
       entry: current.entry,
       modified: DateTime.now().toUtc(),
       due: input.clearDue ? null : input.due ?? current.due,
+      scheduled:
+          input.clearScheduled ? null : input.scheduled ?? current.scheduled,
       waitUntil: input.clearWait ? null : input.waitUntil ?? current.waitUntil,
       end: current.end,
+    );
+    _tasks[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<TaskItem> transitionBoardLane(
+    String taskId,
+    BoardTransitionInput input,
+  ) async {
+    await Future<void>.delayed(_latency);
+
+    final index = _tasks.indexWhere((task) => task.id == taskId);
+    final current = _tasks[index];
+    final status = input.lane == BoardLane.completed
+        ? TaskStatus.completed
+        : current.status;
+    final updated = TaskItem(
+      id: current.id,
+      title: current.title,
+      project: current.project,
+      status: status,
+      tags: current.tags,
+      annotations: current.annotations,
+      entry: current.entry,
+      modified: DateTime.now().toUtc(),
+      due: current.due,
+      scheduled: current.scheduled,
+      waitUntil: input.lane == BoardLane.waiting ? input.waitUntil : null,
+      end: status == TaskStatus.completed ? DateTime.now().toUtc() : null,
     );
     _tasks[index] = updated;
     return updated;

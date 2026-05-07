@@ -200,6 +200,8 @@ creation, editing, completion, and querying.
 
 ## Milestone 5: Taskwarrior Semantics, GTD, And Advanced Views
 
+Status: complete
+
 ### Goal
 
 Expand the product from basic task CRUD into real Taskwarrior-compatible task
@@ -237,41 +239,25 @@ board views, and advanced filtering.
 - Board interactions may oversimplify status and project semantics if they are
   designed for presentation first.
 
-### Remaining Proof Gaps
-
-- Recurring task semantics are still open beyond preserving the `recurring`
-  status value.
-- Complex recurrence schedules expected by Taskwarrior are still unproven.
-- Scheduled and waiting lifecycle rules remain open beyond timestamp mapping
-  and basic waiting-state query filtering.
-- Dependency semantics remain open beyond basic `dep_*` mapping, storage
-  shape, and unresolved-dependency filtering for actionable queries.
-- GTD workflows now have a first `next_actions` query proof, but inbox,
-  review, contexts, and saved GTD views remain open.
-- Advanced filtering and saved-query semantics are still open beyond the first
-  product-facing query boundaries proven so far.
-- Board behavior is still unproven as a semantic operation model. Drag and
-  drop must still be shown to produce valid task updates without inventing
-  client-side semantics.
-
 ### Notes For This Milestone
 
-- Platform-specific interaction polish is still open beyond the current shell.
-- The current board surface proves drag-and-drop structure, not final desktop,
-  web, or Android interaction tuning.
-- This milestone should absorb the remaining advanced filtering work from
-  Milestone 2 and turn it into a stable product-facing query model.
-- This is also the first milestone where the project should prove more
-  directly which backend mutations should defer to TaskChampion semantic logic.
-- This milestone should start replacing product-layer CRUD assumptions with
-  Taskwarrior or TaskChampion-backed mutations for semantic cases such as
-  recurrence, scheduling, completion, and dependency behavior.
-- Basic server CRUD now goes through TaskChampion storage. This milestone
-  still needs to prove richer TaskChampion semantic behavior for recurrence,
-  scheduling, completion side effects, and dependency evaluation.
-- The first actionable GTD query is now backend-owned: `next_actions` returns
-  pending tasks that are not waiting and are not blocked by incomplete
-  dependencies. It is not a full GTD workflow yet.
+- Recurrence support is implemented as Taskwarrior-compatible property
+  preservation and round-trip coverage for `recur`, `rtype`, `until`,
+  `parent`, `mask`, and `imask`. The application does not locally generate
+  future recurrence instances; that remains delegated to Taskwarrior or
+  TaskChampion-compatible semantics.
+- Scheduled and waiting behavior is represented in the core model, the
+  compatibility layer, backend filters, and Flutter task models.
+- GTD support now includes backend-owned saved query presets for inbox, next
+  actions, waiting, and review-shaped views.
+- Advanced filtering now includes project, no-project, tag, due cutoff,
+  waiting, scheduled, blocked, status, preset, and sort fields.
+- Board drag-and-drop now calls a product-facing backend board transition
+  operation for pending, waiting, and completed lanes.
+- Platform-specific board polish remains part of Milestone 8.
+- Deeper recurrence instance generation, conflict behavior, and multi-replica
+  recurrence behavior remain future proof items because they depend on
+  Taskwarrior or TaskChampion execution semantics rather than UI filtering.
 
 ## Milestone 6: Self-Hosted Deployment
 

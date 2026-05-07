@@ -62,6 +62,7 @@ class HttpTaskBackendClient implements TaskBackendClient {
         'required_tag': query.requiredTag,
         'due_before': query.dueBefore?.toUtc().toIso8601String(),
         'include_waiting': query.includeWaiting,
+        'include_scheduled': query.includeScheduled,
         'include_blocked': query.includeBlocked,
         'reference_time': query.referenceTime.toUtc().toIso8601String(),
         'sort': query.sort.apiValue,
@@ -94,6 +95,24 @@ class HttpTaskBackendClient implements TaskBackendClient {
   }
 
   @override
+  Future<TaskItem> transitionBoardLane(
+    String taskId,
+    BoardTransitionInput input,
+  ) async {
+    final response = await _client.post(
+      _uri('/tasks/$taskId/board-transition'),
+      headers: _jsonHeaders,
+      body: jsonEncode(<String, dynamic>{
+        'lane': input.lane.apiValue,
+        'wait_until': input.waitUntil?.toUtc().toIso8601String(),
+      }),
+    );
+    _ensureSuccess(response);
+
+    return _decodeTaskResponse(response.body);
+  }
+
+  @override
   Future<TaskItem> updateTask(
     String taskId,
     UpdateTaskInput input,
@@ -108,6 +127,8 @@ class HttpTaskBackendClient implements TaskBackendClient {
         'tags': input.tags,
         'due': input.due?.toUtc().toIso8601String(),
         'clear_due': input.clearDue,
+        'scheduled': input.scheduled?.toUtc().toIso8601String(),
+        'clear_scheduled': input.clearScheduled,
         'wait': input.waitUntil?.toUtc().toIso8601String(),
         'clear_wait': input.clearWait,
         'add_annotation': input.addAnnotation,
@@ -148,6 +169,7 @@ class HttpTaskBackendClient implements TaskBackendClient {
       entry: _dateTimeOrNull(json['entry']),
       modified: _dateTimeOrNull(json['modified']),
       due: _dateTimeOrNull(json['due']),
+      scheduled: _dateTimeOrNull(json['scheduled']),
       waitUntil: _dateTimeOrNull(json['wait']),
       end: _dateTimeOrNull(json['end']),
     );

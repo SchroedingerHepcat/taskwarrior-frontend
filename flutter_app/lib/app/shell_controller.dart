@@ -5,12 +5,21 @@ import '../models/shell_models.dart';
 
 class ShellController extends ChangeNotifier {
   ShellController({
-    required TaskBackendClient backend,
+    TaskBackendClient? backend,
+    String? backendUrl,
+    TaskBackendClient Function(String baseUrl)? backendFactory,
+    Future<void> Function(String baseUrl)? saveBackendUrl,
     DateTime Function()? clock,
   })  : _backend = backend,
+        _backendUrl = backendUrl,
+        _backendFactory = backendFactory,
+        _saveBackendUrl = saveBackendUrl,
         _clock = clock ?? DateTime.now;
 
-  final TaskBackendClient _backend;
+  TaskBackendClient? _backend;
+  String? _backendUrl;
+  final TaskBackendClient Function(String baseUrl)? _backendFactory;
+  final Future<void> Function(String baseUrl)? _saveBackendUrl;
   final DateTime Function() _clock;
 
   bool _isLoading = true;
@@ -34,10 +43,15 @@ class ShellController extends ChangeNotifier {
   List<TaskItem> get allTasks => List.unmodifiable(_allTasks);
   List<TaskItem> get listTasks => List.unmodifiable(_listTasks);
   TaskListMode get listMode => _listMode;
+  String? get backendUrl => _backendUrl;
   Set<DashboardWidgetType> get enabledWidgets => Set.of(_enabledWidgets);
   String? get boardIntent => _boardIntent;
 
   String get connectionLabel {
+    if (_backend == null) {
+      return 'Backend not configured';
+    }
+
     if (_isLoading) {
       return 'Connecting to HTTP backend';
     }
@@ -63,12 +77,25 @@ class ShellController extends ChangeNotifier {
   }
 
   Future<void> load() async {
+    if (_backend == null) {
+      _isLoading = false;
+      _errorMessage = 'Enter the backend API URL in Settings to connect.';
+      notifyListeners();
+      return;
+    }
+
     await _refresh();
   }
 
   Future<void> createTask(String description) async {
     await _runMutation(() async {
-      final task = await _backend.createTask(
+      final backend = _backend;
+      if (backend == null) {
+        _errorMessage = 'Enter the backend API URL in Settings to connect.';
+        return;
+      }
+
+      final task = await backend.createTask(
         CreateTaskInput(description: description.trim()),
       );
       _selectedTaskId = task.id;
@@ -83,7 +110,13 @@ class ShellController extends ChangeNotifier {
     }
 
     await _runMutation(() async {
-      final updated = await _backend.updateTask(task.id, input);
+      final backend = _backend;
+      if (backend == null) {
+        _errorMessage = 'Enter the backend API URL in Settings to connect.';
+        return;
+      }
+
+      final updated = await backend.updateTask(task.id, input);
       _selectedTaskId = updated.id;
       await _refresh();
     });
@@ -96,7 +129,13 @@ class ShellController extends ChangeNotifier {
     }
 
     await _runMutation(() async {
-      final updated = await _backend.transitionTask(
+      final backend = _backend;
+      if (backend == null) {
+        _errorMessage = 'Enter the backend API URL in Settings to connect.';
+        return;
+      }
+
+      final updated = await backend.transitionTask(
         task.id,
         TaskTransitionInput(status: status),
       );
@@ -123,32 +162,77 @@ class ShellController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> configureBackendUrl(String baseUrl) async {
+    final normalized = baseUrl.trim();
+    if (normalized.isEmpty) {
+      _errorMessage = 'Backend URL is required.';
+      notifyListeners();
+      return;
+    }
+
+    final factory = _backendFactory;
+    if (factory == null) {
+      _errorMessage = 'This build does not support backend URL changes.';
+      notifyListeners();
+      return;
+    }
+
+    _backend = factory(normalized);
+    _backendUrl = normalized;
+    await _saveBackendUrl?.call(normalized);
+    await _refresh();
+  }
+
   void selectTask(String taskId) {
     _selectedTaskId = taskId;
     notifyListeners();
   }
 
-  void recordBoardIntent({
+  Future<void> moveTaskToBoardLane({
     required TaskItem task,
     required BoardLane lane,
-  }) {
-    _selectedTaskId = task.id;
-    _boardIntent = 'Queue "${task.title}" for ${lane.title} once '
-        'server transitions expand beyond list/detail flows.';
-    notifyListeners();
+  }) async {
+    await _runMutation(() async {
+      final backend = _backend;
+      if (backend == null) {
+        _errorMessage = 'Enter the backend API URL in Settings to connect.';
+        return;
+      }
+
+      final updated = await backend.transitionBoardLane(
+        task.id,
+        BoardTransitionInput(
+          lane: lane,
+          waitUntil: lane == BoardLane.waiting
+              ? _clock().toUtc().add(const Duration(days: 1))
+              : null,
+        ),
+      );
+      _selectedTaskId = updated.id;
+      _boardIntent = 'Moved "${task.title}" to ${lane.title}.';
+      await _refresh();
+    });
   }
 
   Future<void> _refresh() async {
+    final backend = _backend;
+    if (backend == null) {
+      _isLoading = false;
+      _errorMessage = 'Enter the backend API URL in Settings to connect.';
+      notifyListeners();
+      return;
+    }
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      _health = await _backend.healthcheck();
+      _health = await backend.healthcheck();
       await _refreshTaskViews();
       await _refreshDashboardWidgets();
     } catch (error) {
-      _errorMessage = error.toString();
+      _errorMessage = _humanReadableError(error);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -157,10 +241,17 @@ class ShellController extends ChangeNotifier {
 
   Future<void> _refreshTaskViews() async {
     final referenceTime = _clock().toUtc();
-    _allTasks = await _backend.queryTasks(
+    final backend = _backend;
+    if (backend == null) {
+      _allTasks = const <TaskItem>[];
+      _listTasks = const <TaskItem>[];
+      return;
+    }
+
+    _allTasks = await backend.queryTasks(
       TaskQuery.all(referenceTime: referenceTime),
     );
-    _listTasks = await _backend.queryTasks(
+    _listTasks = await backend.queryTasks(
       TaskQuery.forListMode(
         mode: _listMode,
         referenceTime: referenceTime,
@@ -180,7 +271,12 @@ class ShellController extends ChangeNotifier {
     _dashboardWidgets.clear();
 
     for (final widget in _enabledWidgets) {
-      final tasks = await _backend.queryTasks(
+      final backend = _backend;
+      if (backend == null) {
+        return;
+      }
+
+      final tasks = await backend.queryTasks(
         TaskQuery.forDashboardWidget(
           widget: widget,
           referenceTime: referenceTime,
@@ -201,10 +297,34 @@ class ShellController extends ChangeNotifier {
     try {
       await action();
     } catch (error) {
-      _errorMessage = error.toString();
+      _errorMessage = _humanReadableError(error);
     } finally {
       _isSaving = false;
       notifyListeners();
     }
+  }
+
+  String _humanReadableError(Object error) {
+    final backend = _backendUrl ?? 'the configured backend';
+    final message = error.toString();
+
+    if (message.contains('Connection refused') ||
+        message.contains('SocketException') ||
+        message.contains('ClientException')) {
+      return 'Could not connect to $backend. Make sure the Rust backend is '
+          'running, or open Settings and enter the correct backend API URL.';
+    }
+
+    if (message.contains('Failed host lookup')) {
+      return 'Could not find the backend host for $backend. Check the backend '
+          'API URL in Settings.';
+    }
+
+    if (message.contains('HTTP 404')) {
+      return 'The backend at $backend responded, but it does not look like the '
+          'expected Taskwarrior Frontend API.';
+    }
+
+    return 'Backend request failed: $message';
   }
 }
