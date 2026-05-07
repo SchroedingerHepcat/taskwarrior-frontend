@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flutter_app/main.dart';
@@ -65,6 +66,35 @@ void main() {
     expect(backend.healthChecks, 1);
     expect(backend.queryCalls, greaterThanOrEqualTo(3));
     expect(find.text('Local development adapter ready'), findsOneWidget);
+  });
+
+  testWidgets('quick create submits with enter', (tester) async {
+    final backend = _FakeBackendClient();
+
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: backend,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(ShellSection.tasks.icon));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('create-task-field')));
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const Key('create-task-field')),
+      'Created with enter',
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(backend.createdDescriptions, contains('Created with enter'));
+    final field = tester.widget<TextField>(
+      find.byKey(const Key('create-task-field')),
+    );
+
+    expect(field.controller?.text, isEmpty);
   });
 
   testWidgets('settings can replace the backend server URL', (tester) async {
@@ -332,6 +362,7 @@ class _FakeBackendClient implements TaskBackendClient {
   final String label;
   int healthChecks = 0;
   int queryCalls = 0;
+  final List<String> createdDescriptions = <String>[];
   final List<String> updatedDescriptions = <String>[];
   final List<DateTime?> updatedDueDates = <DateTime?>[];
   final List<TaskItem> _tasks = <TaskItem>[
@@ -378,6 +409,7 @@ class _FakeBackendClient implements TaskBackendClient {
 
   @override
   Future<TaskItem> createTask(CreateTaskInput input) async {
+    createdDescriptions.add(input.description);
     final task = TaskItem(
       id: 'task-${_tasks.length + 1}',
       title: input.description,

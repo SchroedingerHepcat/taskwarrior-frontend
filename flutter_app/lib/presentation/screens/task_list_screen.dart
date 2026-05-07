@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../app/shell_controller.dart';
 import '../../models/shell_models.dart';
@@ -19,6 +20,7 @@ class TaskListScreen extends StatefulWidget {
 
 class _TaskListScreenState extends State<TaskListScreen> {
   late final TextEditingController _createController;
+  bool _isCreating = false;
 
   @override
   void initState() {
@@ -59,29 +61,24 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 Row(
                   children: <Widget>[
                     Expanded(
-                      child: TextField(
-                        key: const Key('create-task-field'),
-                        controller: _createController,
-                        decoration: const InputDecoration(
-                          hintText: 'Describe a task',
+                      child: Focus(
+                        onKeyEvent: _handleCreateKey,
+                        child: TextField(
+                          key: const Key('create-task-field'),
+                          controller: _createController,
+                          decoration: const InputDecoration(
+                            hintText: 'Describe a task',
+                          ),
+                          textInputAction: TextInputAction.done,
+                          onEditingComplete: _createTask,
+                          onSubmitted: (_) => _createTask(),
                         ),
                       ),
                     ),
                     const SizedBox(width: 12),
                     FilledButton(
-                      onPressed: widget.controller.isSaving
-                          ? null
-                          : () async {
-                              final text = _createController.text.trim();
-                              if (text.isEmpty) {
-                                return;
-                              }
-
-                              await widget.controller.createTask(text);
-                              if (mounted) {
-                                _createController.clear();
-                              }
-                            },
+                      onPressed:
+                          widget.controller.isSaving ? null : _createTask,
                       child: const Text('Create'),
                     ),
                   ],
@@ -165,5 +162,44 @@ class _TaskListScreenState extends State<TaskListScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> _createTask() async {
+    if (_isCreating || widget.controller.isSaving) {
+      return;
+    }
+
+    final text = _createController.text.trim();
+    if (text.isEmpty) {
+      return;
+    }
+
+    _isCreating = true;
+    try {
+      await widget.controller.createTask(text);
+      if (mounted) {
+        _createController.clear();
+      }
+    } finally {
+      _isCreating = false;
+    }
+  }
+
+  KeyEventResult _handleCreateKey(
+    FocusNode node,
+    KeyEvent event,
+  ) {
+    if (event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
+
+    final key = event.logicalKey;
+    if (key != LogicalKeyboardKey.enter &&
+        key != LogicalKeyboardKey.numpadEnter) {
+      return KeyEventResult.ignored;
+    }
+
+    _createTask();
+    return KeyEventResult.handled;
   }
 }
