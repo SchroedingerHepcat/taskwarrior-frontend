@@ -1,0 +1,28 @@
+# Example backend configuration for taskwarrior-frontend.
+#
+# Run with:
+#
+# cargo run -p server -- --config ../deploy/backend.example.toml
+#
+# CLI flags override environment variables, and environment variables override
+# this file.
+
+port = 8080
+
+[ui]
+# Stores shared saved views and dashboard layouts. This is UI configuration,
+# not TaskChampion task data.
+state_path = "./taskwarrior-frontend-ui-state.json"
+
+[taskchampion.storage]
+# Stores this backend's TaskChampion replica data.
+path = "./taskchampion.sqlite"
+
+[taskchampion.sync]
+# Use the URL of the TaskChampion sync server, not this app's HTTP API URL.
+url = "https://sync.example.com"
+client_id = "00000000-0000-0000-0000-000000000001"
+encryption_secret = "replace-me"
+
+# Set true only for trusted local/plain-HTTP deployments.
+allow_plain_http = false

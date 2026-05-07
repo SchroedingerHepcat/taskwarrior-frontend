@@ -339,9 +339,16 @@ deployment and basic operational controls.
 - Backend UI configuration for shared saved views and dashboard layouts can be
   persisted with `--ui-state-path` or
   `TASKWARRIOR_FRONTEND_UI_STATE_PATH`.
+- The server binary now accepts durable TaskChampion storage configuration and
+  remote TaskChampion sync-server configuration.
+- Backend configuration can now be loaded from a sectioned TOML file, with CLI
+  and environment overrides.
+- HTTP task reads and writes now perform configured TaskChampion sync at the
+  backend boundary.
 - Deployment packaging, migration, backup, and operational validation for
   durable TaskChampion storage remain open.
 - A real external TaskChampion sync-server deployment test remains open.
+- User-facing sync status and retry controls remain part of Milestone 7.
 
 ## Milestone 7: Sync, Error, And Conflict UX
 
@@ -381,6 +388,8 @@ clients, especially once multiple devices are in use.
 
 - Sync orchestration now has an internal coordinator seam and a local
   TaskChampion sync proof between two backend replicas.
+- HTTP task writes now sync after local TaskChampion mutation, and HTTP task
+  reads sync before serving product queries when sync is configured.
 - Compatibility with a separately hosted TaskChampion sync server remains open
   until tested against that server or an equivalent test service.
 - Offline write reconciliation remains open.

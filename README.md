@@ -19,12 +19,26 @@ The Rust backend has internal configuration for in-memory TaskChampion storage
 used by tests and SQLite-backed TaskChampion storage for durable deployment
 paths. It also has an internal sync coordinator boundary and a local
 TaskChampion sync proof between two backend replicas.
+The server binary now defaults to SQLite TaskChampion storage at
+`taskwarrior-frontend-tasks.sqlite`; set `--taskchampion-storage-path` or
+`TASKCHAMPION_STORAGE_PATH` to choose another location.
+Backend settings can also be loaded from a TOML configuration file with
+`--config` or `TASKWARRIOR_FRONTEND_CONFIG`. CLI flags override environment
+variables, and environment variables override the configuration file.
 
 The intended sync model is to let this backend act as a TaskChampion replica
 that can connect to a separately hosted TaskChampion sync server. This project
 is intended to provide a good frontend and product API for TaskChampion data,
-not replace the upstream TaskChampion sync server. Compatibility with a real
-external TaskChampion sync server remains an explicit proof gap.
+not replace the upstream TaskChampion sync server. Configure remote sync with
+`--taskchampion-sync-url`, `--taskchampion-client-id`, and
+`--taskchampion-encryption-secret`, or the matching
+`TASKCHAMPION_SYNC_URL`, `TASKCHAMPION_CLIENT_ID`, and
+`TASKCHAMPION_ENCRYPTION_SECRET` environment variables. Plain HTTP sync
+servers require `--taskchampion-allow-plain-http` or
+`TASKCHAMPION_ALLOW_PLAIN_HTTP=true`.
+
+See `deploy/backend.example.toml` for an example sectioned configuration
+file.
 
 The Flutter app currently includes responsive dashboard, list, board, and
 detail screens backed by that HTTP API. It now proves end-to-end create,

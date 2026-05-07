@@ -214,6 +214,9 @@ The intended sync topology is:
 - The backend may synchronize that replica with an external TaskChampion sync
   server.
 - The external TaskChampion sync server remains the sync coordination service.
+- When sync is configured, backend task reads should pull from the
+  TaskChampion sync server before serving product queries, and task writes
+  should push through TaskChampion sync after local TaskChampion mutation.
 
 The intended layer responsibilities are:
 
@@ -229,7 +232,9 @@ The intended layer responsibilities are:
   It should route task CRUD through Taskwarrior or TaskChampion via the
   compatibility layer, not expose raw TaskChampion storage or replica objects.
   It should also own configuration for connecting its TaskChampion replica to
-  an external TaskChampion sync server.
+  an external TaskChampion sync server. Backend configuration may come from a
+  file, environment variables, or CLI flags, but those settings remain server
+  setup concerns rather than Flutter API fields.
 - `flutter_app`
   Owns presentation and user interaction only. It must not implement
   Taskwarrior semantics itself.
@@ -350,6 +355,8 @@ code and tests in this repository:
   tests, and remote sync-server connection details
 - local TaskChampion sync proof moving a task between two backend replicas
   through TaskChampion sync APIs
+- HTTP task writes syncing to a TaskChampion server and HTTP task reads
+  pulling from that server before serving product-facing queries
 - a Flutter shell boundary that routes user navigation and screen state through
   product-facing client operations rather than Taskwarrior storage concepts
 - full end-to-end create, update, complete, and query flows from Flutter to the

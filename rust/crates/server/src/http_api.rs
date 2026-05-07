@@ -23,6 +23,9 @@ use std::fs;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
+use taskwarrior_compat::{
+    TaskChampionStorageConfig, TaskChampionSyncConfig, TaskChampionTaskStore,
+};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
@@ -37,6 +40,8 @@ pub struct AppState {
     saved_views: Arc<Mutex<BTreeMap<String, HttpSavedView>>>,
     dashboard_layouts: Arc<Mutex<BTreeMap<String, HttpDashboardLayout>>>,
     ui_state_path: Option<Arc<PathBuf>>,
+    storage_config: TaskChampionStorageConfig,
+    sync_config: TaskChampionSyncConfig,
 }
 
 impl Default for AppState {
@@ -49,6 +54,8 @@ impl Default for AppState {
             saved_views: Arc::new(Mutex::new(BTreeMap::new())),
             dashboard_layouts: Arc::new(Mutex::new(BTreeMap::new())),
             ui_state_path: None,
+            storage_config: TaskChampionStorageConfig::InMemory,
+            sync_config: TaskChampionSyncConfig::Disabled,
         }
     }
 }
@@ -57,6 +64,8 @@ impl AppState {
     pub async fn from_config(
         config: BackendConfig
     ) -> Result<Self, ServiceError> {
+        let storage_config = config.storage.clone();
+        let sync_config = config.sync.clone();
         let repository =
             TaskChampionTaskRepository::from_storage_config(config.storage)
                 .await?;
@@ -74,6 +83,8 @@ impl AppState {
             saved_views: Arc::new(Mutex::new(ui_state.saved_views)),
             dashboard_layouts: Arc::new(Mutex::new(ui_state.dashboard_layouts)),
             ui_state_path: ui_state.path.map(Arc::new),
+            storage_config,
+            sync_config,
         })
     }
 }
@@ -299,6 +310,8 @@ async fn create_task(
         })
         .await
         .map_err(ServiceHttpError)?;
+    drop(service);
+    sync_configured_storage(&state).await?;
 
     Ok(Json(TaskResponse {
         task: map_task(task),
@@ -310,6 +323,7 @@ async fn get_task(
     Path(task_id): Path<String>,
 ) -> Result<Json<TaskResponse>, ServiceHttpError> {
     let task_id = parse_uuid(&task_id)?;
+    sync_configured_storage(&state).await?;
     let mut service = state.service.lock().await;
     let task = service
         .get_task(task_id)
@@ -348,6 +362,8 @@ async fn update_task(
         .update_task(task_id, request)
         .await
         .map_err(ServiceHttpError)?;
+    drop(service);
+    sync_configured_storage(&state).await?;
 
     Ok(Json(TaskResponse {
         task: map_task(task),
@@ -370,6 +386,8 @@ async fn transition_board_lane(
         .transition_board_lane(task_id, request)
         .await
         .map_err(ServiceHttpError)?;
+    drop(service);
+    sync_configured_storage(&state).await?;
 
     Ok(Json(TaskResponse {
         task: map_task(task),
@@ -393,6 +411,8 @@ async fn transition_task(
         )
         .await
         .map_err(ServiceHttpError)?;
+    drop(service);
+    sync_configured_storage(&state).await?;
 
     Ok(Json(TaskResponse {
         task: map_task(task),
@@ -404,6 +424,7 @@ async fn query_tasks(
     Json(request): Json<HttpTaskQueryRequest>,
 ) -> Result<Json<TaskListResponse>, ServiceHttpError> {
     let reference_time = parse_datetime_or_now(request.reference_time.clone())?;
+    sync_configured_storage(&state).await?;
     let mut service = state.service.lock().await;
     let tasks = service
         .query_tasks(&build_task_query(
@@ -416,6 +437,37 @@ async fn query_tasks(
     Ok(Json(TaskListResponse {
         tasks: tasks.into_iter().map(map_task).collect(),
     }))
+}
+
+async fn sync_configured_storage(
+    state: &AppState
+) -> Result<(), ServiceHttpError> {
+    if !state.sync_config.is_enabled() {
+        return Ok(());
+    }
+
+    let storage = state.storage_config.clone();
+    let sync = state.sync_config.clone();
+    tokio::task::spawn_blocking(move || {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(sync_io_error)?;
+        runtime.block_on(async move {
+            let mut store = TaskChampionTaskStore::from_config(storage)
+                .await
+                .map_err(sync_compat_error)?;
+            store
+                .sync(sync)
+                .await
+                .map_err(sync_compat_error)?;
+            Ok::<(), ServiceHttpError>(())
+        })
+    })
+    .await
+    .map_err(sync_join_error)??;
+
+    Ok(())
 }
 
 async fn list_saved_views(
@@ -556,6 +608,24 @@ fn ui_state_error(error: impl std::fmt::Display) -> ServiceError {
 
 fn ui_state_http_error(error: impl std::fmt::Display) -> ServiceHttpError {
     ServiceHttpError(ui_state_error(error))
+}
+
+fn sync_io_error(error: impl std::fmt::Display) -> ServiceHttpError {
+    ServiceHttpError(ServiceError::Sync(format!(
+        "taskchampion sync runtime failed: {error}"
+    )))
+}
+
+fn sync_compat_error(error: impl std::fmt::Display) -> ServiceHttpError {
+    ServiceHttpError(ServiceError::Sync(format!(
+        "taskchampion sync failed: {error}"
+    )))
+}
+
+fn sync_join_error(error: impl std::fmt::Display) -> ServiceHttpError {
+    ServiceHttpError(ServiceError::Sync(format!(
+        "taskchampion sync task failed: {error}"
+    )))
 }
 
 fn build_task_query(
@@ -824,6 +894,10 @@ mod tests {
     use axum::http::{Method, Request, StatusCode};
     use serde_json::{json, Value};
     use std::path::PathBuf;
+    use taskwarrior_compat::{
+        TaskChampionLocalSyncConfig, TaskChampionStorageConfig,
+        TaskChampionSyncConfig,
+    };
     use tower::ServiceExt;
 
     #[tokio::test]
@@ -1205,6 +1279,60 @@ mod tests {
         let _ = std::fs::remove_file(path);
     }
 
+    #[tokio::test]
+    async fn http_task_writes_sync_and_reads_pull_from_taskchampion_server() {
+        let server_dir = temp_sync_server_path();
+        std::fs::create_dir_all(&server_dir).unwrap();
+        let sync = TaskChampionSyncConfig::Local(TaskChampionLocalSyncConfig {
+            server_dir: server_dir.clone(),
+        });
+        let first_storage = temp_sqlite_path();
+        let second_storage = temp_sqlite_path();
+        let first_state = AppState::from_config(BackendConfig {
+            storage: TaskChampionStorageConfig::Sqlite {
+                path: first_storage.clone(),
+                create_if_missing: true,
+            },
+            sync: sync.clone(),
+            ..BackendConfig::default()
+        })
+        .await
+        .unwrap();
+        let first = super::build_router_with_state(first_state);
+        let second_state = AppState::from_config(BackendConfig {
+            storage: TaskChampionStorageConfig::Sqlite {
+                path: second_storage.clone(),
+                create_if_missing: true,
+            },
+            sync,
+            ..BackendConfig::default()
+        })
+        .await
+        .unwrap();
+        let second = super::build_router_with_state(second_state);
+
+        let created = create_http_task(&first, "Synced through HTTP").await;
+        let queried = post_json(
+            &second,
+            "/tasks/query",
+            json!({
+                "statuses": ["pending"],
+                "reference_time": "2026-04-12T10:00:00Z"
+            }),
+        )
+        .await;
+
+        assert_eq!(queried["tasks"][0]["id"], created);
+        assert_eq!(
+            queried["tasks"][0]["description"],
+            "Synced through HTTP"
+        );
+
+        let _ = std::fs::remove_dir_all(server_dir);
+        let _ = std::fs::remove_file(first_storage);
+        let _ = std::fs::remove_file(second_storage);
+    }
+
     async fn create_http_task(
         app: &axum::Router,
         description: &str,
@@ -1223,10 +1351,16 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        let status = response.status();
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
             .unwrap();
+        assert_eq!(
+            status,
+            StatusCode::OK,
+            "{}",
+            String::from_utf8_lossy(&body)
+        );
         let created: Value = serde_json::from_slice(&body).unwrap();
 
         created["task"]["id"]
@@ -1253,6 +1387,31 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    async fn post_json(
+        app: &axum::Router,
+        path: &str,
+        body: Value,
+    ) -> Value {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri(path)
+                    .header("content-type", "application/json")
+                    .body(Body::from(body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+
+        serde_json::from_slice(&body).unwrap()
     }
 
     async fn get_json(
@@ -1287,6 +1446,28 @@ mod tests {
         std::env::temp_dir().join(format!(
             "taskwarrior-frontend-ui-state-{}.json",
             now
+        ))
+    }
+
+    fn temp_sqlite_path() -> PathBuf {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+
+        std::env::temp_dir().join(format!(
+            "taskwarrior-frontend-http-sync-{now}.sqlite"
+        ))
+    }
+
+    fn temp_sync_server_path() -> PathBuf {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+
+        std::env::temp_dir().join(format!(
+            "taskwarrior-frontend-http-sync-{now}"
         ))
     }
 }

@@ -125,7 +125,11 @@ operation is not yet part of the current HTTP surface.
 
 The current HTTP surface does not expose sync configuration, TaskChampion
 replica details, or TaskChampion sync-server credentials. Those remain backend
-setup concerns.
+setup concerns. The server binary accepts TaskChampion storage and sync
+configuration through CLI flags, environment variables, or a TOML
+configuration file. Precedence is CLI, then environment, then file, then
+defaults. The TOML file groups operator settings under `[ui]`,
+`[taskchampion.storage]`, and `[taskchampion.sync]`.
 
 ## Current Internal Service Boundaries
 
@@ -143,6 +147,10 @@ The server crate now separates:
   connection details
 - durable backend UI configuration for shared saved views and dashboard
   layouts, separate from TaskChampion task storage
+- runnable backend configuration for SQLite TaskChampion storage and remote
+  TaskChampion sync-server connection details
+- backend configuration file parsing for storage, sync, port, and UI state
+  paths without exposing those settings to Flutter
 
 The server boundary now proves that local TaskChampion sync can move tasks
 between two backend replicas without exposing TaskChampion internals to
@@ -170,6 +178,11 @@ sync client API:
   webpki roots enabled
 - task storage uses in-memory TaskChampion storage for tests or SQLite-backed
   TaskChampion storage for durable backend paths
+
+When sync is configured, HTTP task reads synchronize the backend replica
+before reading, and HTTP task writes synchronize after the local TaskChampion
+mutation. Sync failure is returned as a backend request error instead of being
+silently ignored.
 
 ## Boundary Rules
 
