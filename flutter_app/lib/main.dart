@@ -14,6 +14,7 @@ Future<void> main() async {
   const compileTimeBaseUrl = String.fromEnvironment('BACKEND_BASE_URL');
   final store = BackendConfigurationStore();
   final savedBaseUrl = await store.loadBackendUrl();
+  final themePreference = await store.loadThemePreference();
   final baseUrl = compileTimeBaseUrl.trim().isNotEmpty
       ? compileTimeBaseUrl.trim()
       : savedBaseUrl;
@@ -24,6 +25,8 @@ Future<void> main() async {
       initialBackendUrl: baseUrl,
       backendFactory: (baseUrl) => HttpTaskBackendClient(baseUrl: baseUrl),
       saveBackendUrl: store.saveBackendUrl,
+      initialThemePreference: themePreference,
+      saveThemePreference: store.saveThemePreference,
     ),
   );
 }

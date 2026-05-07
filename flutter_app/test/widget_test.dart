@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:flutter_app/app/app_theme.dart';
 import 'package:flutter_app/main.dart';
 import 'package:flutter_app/models/shell_models.dart';
 import 'package:flutter_app/backend/task_backend_client.dart';
@@ -281,6 +282,11 @@ void main() {
   });
 
   testWidgets('settings can replace the backend server URL', (tester) async {
+    tester.view.physicalSize = const Size(900, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final initial = _FakeBackendClient(label: 'Initial backend');
     final replacement = _FakeBackendClient(label: 'Replacement backend');
     String? savedUrl;
@@ -316,8 +322,39 @@ void main() {
     expect(label.data, 'Replacement backend');
   });
 
+  testWidgets('settings can change theme preference', (tester) async {
+    AppThemePreference? savedTheme;
+
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: _FakeBackendClient(),
+        saveThemePreference: (preference) async {
+          savedTheme = preference;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(materialApp.themeMode, ThemeMode.dark);
+
+    await tester.tap(find.byIcon(ShellSection.settings.icon));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Light'));
+    await tester.pumpAndSettle();
+
+    final updatedApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(updatedApp.themeMode, ThemeMode.light);
+    expect(savedTheme, AppThemePreference.light);
+  });
+
   testWidgets('app starts at settings when no backend is configured',
       (tester) async {
+    tester.view.physicalSize = const Size(900, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(
       TaskwarriorFrontendApp(
         backendFactory: (_) => _FakeBackendClient(),

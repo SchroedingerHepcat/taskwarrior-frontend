@@ -13,12 +13,17 @@ class TaskwarriorFrontendApp extends StatefulWidget {
     this.initialBackendUrl,
     this.backendFactory,
     this.saveBackendUrl,
+    this.initialThemePreference = AppThemePreference.dark,
+    this.saveThemePreference,
   });
 
   final TaskBackendClient? backend;
   final String? initialBackendUrl;
   final TaskBackendClient Function(String baseUrl)? backendFactory;
   final Future<void> Function(String baseUrl)? saveBackendUrl;
+  final AppThemePreference initialThemePreference;
+  final Future<void> Function(AppThemePreference preference)?
+      saveThemePreference;
 
   @override
   State<TaskwarriorFrontendApp> createState() => _TaskwarriorFrontendAppState();
@@ -35,6 +40,8 @@ class _TaskwarriorFrontendAppState extends State<TaskwarriorFrontendApp> {
       backendUrl: widget.initialBackendUrl,
       backendFactory: widget.backendFactory,
       saveBackendUrl: widget.saveBackendUrl,
+      themePreference: widget.initialThemePreference,
+      saveThemePreference: widget.saveThemePreference,
     )..load();
   }
 
@@ -46,26 +53,33 @@ class _TaskwarriorFrontendAppState extends State<TaskwarriorFrontendApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Taskwarrior Frontend',
-      debugShowCheckedModeBanner: false,
-      theme: buildAppTheme(),
-      initialRoute:
-          widget.backend == null ? AppRoutes.settings : AppRoutes.dashboard,
-      onGenerateRoute: (settings) {
-        final section = AppRoutes.sectionFor(settings.name);
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        return MaterialApp(
+          title: 'Taskwarrior Frontend',
+          debugShowCheckedModeBanner: false,
+          theme: buildLightAppTheme(),
+          darkTheme: buildDarkAppTheme(),
+          themeMode: _controller.themePreference.themeMode,
+          initialRoute:
+              widget.backend == null ? AppRoutes.settings : AppRoutes.dashboard,
+          onGenerateRoute: (settings) {
+            final section = AppRoutes.sectionFor(settings.name);
 
-        return PageRouteBuilder<void>(
-          settings: settings,
-          transitionDuration: const Duration(milliseconds: 220),
-          reverseTransitionDuration: const Duration(milliseconds: 180),
-          pageBuilder: (context, animation, secondaryAnimation) {
-            return FadeTransition(
-              opacity: animation,
-              child: TaskwarriorShell(
-                controller: _controller,
-                currentSection: section,
-              ),
+            return PageRouteBuilder<void>(
+              settings: settings,
+              transitionDuration: const Duration(milliseconds: 220),
+              reverseTransitionDuration: const Duration(milliseconds: 180),
+              pageBuilder: (context, animation, secondaryAnimation) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: TaskwarriorShell(
+                    controller: _controller,
+                    currentSection: section,
+                  ),
+                );
+              },
             );
           },
         );

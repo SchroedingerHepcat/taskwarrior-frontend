@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../backend/task_backend_client.dart';
 import '../models/shell_models.dart';
+import 'app_theme.dart';
 
 class ShellController extends ChangeNotifier {
   ShellController({
@@ -9,17 +10,23 @@ class ShellController extends ChangeNotifier {
     String? backendUrl,
     TaskBackendClient Function(String baseUrl)? backendFactory,
     Future<void> Function(String baseUrl)? saveBackendUrl,
+    AppThemePreference themePreference = AppThemePreference.dark,
+    Future<void> Function(AppThemePreference preference)? saveThemePreference,
     DateTime Function()? clock,
   })  : _backend = backend,
         _backendUrl = backendUrl,
         _backendFactory = backendFactory,
         _saveBackendUrl = saveBackendUrl,
+        _themePreference = themePreference,
+        _saveThemePreference = saveThemePreference,
         _clock = clock ?? DateTime.now;
 
   TaskBackendClient? _backend;
   String? _backendUrl;
   final TaskBackendClient Function(String baseUrl)? _backendFactory;
   final Future<void> Function(String baseUrl)? _saveBackendUrl;
+  final Future<void> Function(AppThemePreference preference)?
+      _saveThemePreference;
   final DateTime Function() _clock;
 
   bool _isLoading = true;
@@ -33,6 +40,7 @@ class ShellController extends ChangeNotifier {
   final Map<DashboardWidgetType, DashboardWidgetData> _dashboardWidgets =
       <DashboardWidgetType, DashboardWidgetData>{};
   TaskListMode _listMode = TaskListMode.all;
+  AppThemePreference _themePreference;
   String? _selectedTaskId;
   String? _boardIntent;
 
@@ -43,6 +51,7 @@ class ShellController extends ChangeNotifier {
   List<TaskItem> get allTasks => List.unmodifiable(_allTasks);
   List<TaskItem> get listTasks => List.unmodifiable(_listTasks);
   TaskListMode get listMode => _listMode;
+  AppThemePreference get themePreference => _themePreference;
   String? get backendUrl => _backendUrl;
   Set<DashboardWidgetType> get enabledWidgets => Set.of(_enabledWidgets);
   String? get boardIntent => _boardIntent;
@@ -188,6 +197,12 @@ class ShellController extends ChangeNotifier {
     _backendUrl = normalized;
     await _saveBackendUrl?.call(normalized);
     await _refresh();
+  }
+
+  Future<void> setThemePreference(AppThemePreference preference) async {
+    _themePreference = preference;
+    notifyListeners();
+    await _saveThemePreference?.call(preference);
   }
 
   void selectTask(String taskId) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_theme.dart';
 import '../../app/shell_controller.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -36,6 +37,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ListView(
       key: const Key('settings-screen'),
       children: <Widget>[
+        Text(
+          'Appearance',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 8),
+        const Text('Choose the app color mode. Dark mode is the default.'),
+        const SizedBox(height: 12),
+        SegmentedButton<AppThemePreference>(
+          key: const Key('theme-mode-control'),
+          segments: AppThemePreference.values.map((preference) {
+            return ButtonSegment<AppThemePreference>(
+              value: preference,
+              label: Text(preference.label),
+            );
+          }).toList(),
+          selected: <AppThemePreference>{
+            widget.controller.themePreference,
+          },
+          onSelectionChanged: (selection) {
+            widget.controller.setThemePreference(selection.single);
+          },
+        ),
+        const SizedBox(height: 28),
         Text(
           'Backend server',
           style: Theme.of(context).textTheme.titleLarge,

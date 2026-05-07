@@ -1,15 +1,59 @@
 import 'package:flutter/material.dart';
 
-ThemeData buildAppTheme() {
-  const canvas = Color(0xFFF5F1E8);
-  const ink = Color(0xFF16343F);
-  const accent = Color(0xFFCB5D39);
-  const muted = Color(0xFF5E756A);
-  const surface = Color(0xFFFFFCF7);
+enum AppThemePreference {
+  dark('Dark', ThemeMode.dark),
+  light('Light', ThemeMode.light),
+  system('System', ThemeMode.system);
 
+  const AppThemePreference(
+    this.label,
+    this.themeMode,
+  );
+
+  final String label;
+  final ThemeMode themeMode;
+
+  static AppThemePreference fromStorage(String? value) {
+    return AppThemePreference.values.firstWhere(
+      (preference) => preference.name == value,
+      orElse: () => AppThemePreference.dark,
+    );
+  }
+}
+
+ThemeData buildLightAppTheme() {
+  return _buildAppTheme(
+    brightness: Brightness.light,
+    canvas: const Color(0xFFF5F1E8),
+    ink: const Color(0xFF16343F),
+    accent: const Color(0xFFCB5D39),
+    muted: const Color(0xFF5E756A),
+    surface: const Color(0xFFFFFCF7),
+  );
+}
+
+ThemeData buildDarkAppTheme() {
+  return _buildAppTheme(
+    brightness: Brightness.dark,
+    canvas: const Color(0xFF121A1D),
+    ink: const Color(0xFFE6F1EF),
+    accent: const Color(0xFFE38C66),
+    muted: const Color(0xFF9EB8AD),
+    surface: const Color(0xFF1B262A),
+  );
+}
+
+ThemeData _buildAppTheme({
+  required Brightness brightness,
+  required Color canvas,
+  required Color ink,
+  required Color accent,
+  required Color muted,
+  required Color surface,
+}) {
   final scheme = ColorScheme.fromSeed(
     seedColor: ink,
-    brightness: Brightness.light,
+    brightness: brightness,
   ).copyWith(
     primary: ink,
     secondary: accent,
@@ -45,7 +89,7 @@ ThemeData buildAppTheme() {
         letterSpacing: 0.2,
       ),
     ),
-    appBarTheme: const AppBarTheme(
+    appBarTheme: AppBarTheme(
       backgroundColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
