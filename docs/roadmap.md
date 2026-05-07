@@ -21,7 +21,7 @@
 
 ## Milestone 1: Compatibility Spike
 
-Status: in progress
+Status: complete
 
 ### Goal
 
@@ -31,8 +31,9 @@ designing around direct task data files.
 
 ### Deliverables
 
-- Rust workspace with `core`, `taskwarrior_compat`, and `server` crates.
-- Initial task domain model boundaries in `core`.
+- Rust workspace with `taskwarrior_core`, `taskwarrior_compat`, and `server`
+  crates.
+- Initial task domain model boundaries in `taskwarrior_core`.
 - Initial compatibility boundary in `taskwarrior_compat`.
 - Initial proof that product-facing backend operations can translate through
   the compatibility layer without exposing raw TaskChampion objects.
@@ -58,9 +59,23 @@ designing around direct task data files.
   semantic concerns.
 - Early tests may prove only shape, not behavior.
 
+### Notes For This Milestone
+
+- The initial crate was renamed from `core` to `taskwarrior_core` to avoid
+  confusion with Rust's standard `core` crate.
+- The spike has since been expanded by later milestones. The current code now
+  proves Taskwarrior-compatible field mappings, recurrence property
+  preservation, dependency mapping, product-facing backend operations, and a
+  TaskChampion-backed storage path without exposing raw TaskChampion objects
+  to clients.
+- Deeper semantic proof for recurrence execution, scheduled and waiting
+  lifecycle behavior, dependency side effects, and sync conflict handling is
+  intentionally tracked in later milestones rather than blocking the initial
+  compatibility spike.
+
 ## Milestone 2: Backend API Scaffold
 
-Status: in progress
+Status: complete
 
 ### Goal
 
@@ -100,6 +115,20 @@ task semantics in Rust and leaving room for future sync and integration work.
 - A generic repository abstraction may hide the required TaskChampion-backed
   CRUD path if it remains the only storage proof.
 - Integration extensibility may be asserted in structure but not yet validated.
+
+### Notes For This Milestone
+
+- The backend now exposes a documented, test-covered HTTP API for health,
+  create, get, update, transition, board transition, query, saved views, and
+  dashboard layouts.
+- Server request validation, task service logic, TaskChampion-backed storage,
+  and sync orchestration are separated behind Rust service boundaries.
+- Task CRUD routes through TaskChampion-backed storage rather than an
+  independent authoritative task database, and the API does not expose raw
+  TaskChampion storage, replica objects, or Taskwarrior data files.
+- Authentication, pagination, public sync status controls, dependency mutation
+  on the public HTTP surface, and conflict behavior are future API hardening
+  work. They are not blockers for the scaffold milestone.
 
 ## Milestone 3: Flutter Shell
 
@@ -186,17 +215,15 @@ creation, editing, completion, and querying.
   list and dashboard flows.
 - The current backend update shape is intentionally narrow and will likely need
   expansion once task detail editing includes more Taskwarrior-aligned fields.
-- Advanced filtering remains open beyond status, tag, due cutoff, and
-  waiting-state handling.
 - It is still not fully proven which mutation paths should call more directly
   into TaskChampion semantics and which should remain product-layer logic.
 - The current HTTP surface does not yet expose every internal service
   operation, including dependency mutation, because this milestone only needed
   the first end-to-end CRUD and query path.
-- The current implementation now routes server CRUD through a TaskChampion
-  `Replica` using TaskChampion's in-memory storage backend. Future deployment
-  work should replace that with durable TaskChampion configuration rather than
-  a custom authoritative database.
+- Later milestones added advanced filtering, durable TaskChampion storage
+  configuration, recurrence editing, saved views, dashboard layouts, and
+  TaskChampion sync configuration. Those additions do not change the Milestone
+  4 scope.
 
 ## Milestone 5: Taskwarrior Semantics, GTD, And Advanced Views
 
@@ -326,7 +353,8 @@ deployment and basic operational controls.
 
 ### Notes For This Milestone
 
-- Authentication and authorization are still open carryover from Milestone 2.
+- Authentication and authorization remain open deployment and product policy
+  decisions.
 - Internal backend configuration now supports in-memory TaskChampion storage
   for tests and SQLite-backed TaskChampion storage for durable paths.
 - Internal backend sync configuration now models disabled sync, local
