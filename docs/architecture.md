@@ -255,6 +255,15 @@ The intended layer responsibilities are:
 - The project still needs a product-facing task model and API shape, because
   dashboards, boards, filters, and future integrations should not be forced to
   couple directly to low-level TaskChampion object shapes.
+- Recurrence instance creation is owned by Taskwarrior or TaskChampion
+  semantics. This application should expose recurring tasks, allow users to
+  create recurrence settings on existing tasks, and allow users to modify
+  recurrence options. The client and this project's backend must not spawn
+  future recurring task instances themselves.
+- The product interface should eventually expose every recurrence schedule
+  option supported by Taskwarrior, but the app should still store and submit
+  those options through Taskwarrior-compatible recurrence properties rather
+  than inventing a separate recurrence engine.
 
 ## What Still Needs Proof
 
@@ -341,7 +350,10 @@ code and tests in this repository:
 
 The following areas are still open and should not be treated as proven yet:
 
-- recurrence instance generation and child-task creation behavior
+- recurrence creation and editing UI for every Taskwarrior-supported schedule
+  option
+- proof that Taskwarrior or TaskChampion creates recurrence child tasks through
+  their own semantics after this app sets recurrence properties
 - scheduled and waiting lifecycle behavior beyond timestamp mapping and
   backend query filtering
 - dependency semantics beyond basic `dep_*` mapping, storage shape, and

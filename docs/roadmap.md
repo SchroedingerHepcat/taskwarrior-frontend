@@ -210,7 +210,8 @@ board views, and advanced filtering.
 
 ### Deliverables
 
-- Recurrence support, including complex schedules expected by Taskwarrior.
+- Recurrence viewing and editing, including every schedule option supported by
+  Taskwarrior.
 - Scheduled and waiting task behavior as supported by the compatibility model.
 - GTD-oriented organization primitives such as inbox-style capture, next
   actions, and review-friendly filtered views.
@@ -222,8 +223,11 @@ board views, and advanced filtering.
 
 ### Acceptance Criteria
 
-- Recurring tasks and complex schedules are covered by automated compatibility
+- Recurring tasks and complex schedule options can be created or modified
+  through the product interface and are covered by automated compatibility
   tests.
+- The app does not create recurrence child tasks itself; Taskwarrior or
+  TaskChampion remains responsible for recurrence execution.
 - GTD-style task management is possible without bypassing the main task model.
 - List and board views are both backed by the same server semantics.
 - Drag-and-drop board changes translate into valid task updates and are test
@@ -260,9 +264,10 @@ board views, and advanced filtering.
 - Board drag-and-drop now calls a product-facing backend board transition
   operation for pending, waiting, and completed lanes.
 - Platform-specific board polish remains part of Milestone 8.
-- Deeper recurrence instance generation, conflict behavior, and multi-replica
-  recurrence behavior remain future proof items because they depend on
-  Taskwarrior or TaskChampion execution semantics rather than UI filtering.
+- Recurrence instance generation, conflict behavior, and multi-replica
+  recurrence behavior remain Taskwarrior or TaskChampion responsibilities. This
+  app should prove that it can set and modify recurrence options without
+  spawning child tasks itself.
 
 ### Remaining Work
 
@@ -275,8 +280,10 @@ board views, and advanced filtering.
   survive restart.
 - Decide whether saved views are backend-owned resources or local client
   preferences backed by product-facing query objects.
-- Clarify which recurrence behaviors are delegated to Taskwarrior or
-  TaskChampion versus represented directly in this app.
+- Add frontend controls for creating and modifying every Taskwarrior-supported
+  recurrence schedule option on existing tasks.
+- Add tests proving recurrence controls submit Taskwarrior-compatible
+  recurrence properties without spawning child tasks in the client.
 - Expand the current user-facing advanced filter panel into saved views and
   dashboard-backed workflow configuration.
 

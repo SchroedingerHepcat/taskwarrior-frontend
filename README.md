@@ -34,7 +34,9 @@ panel for backend-owned query fields such as workflow preset, project, tag,
 no-project, no-tags, date ranges, status, visibility flags, and sort order.
 Recurrence properties are preserved through the Taskwarrior-compatible model;
 recurrence instance generation remains delegated to Taskwarrior or
-TaskChampion-compatible semantics.
+TaskChampion-compatible semantics. The app should provide controls to view
+recurring tasks and edit Taskwarrior-supported recurrence options, but it
+should not spawn recurrence child tasks itself.
 
 The Flutter app stores the configured backend API URL locally. If no backend
 URL is provided at build time and no saved URL exists, the app starts on

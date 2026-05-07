@@ -85,7 +85,11 @@ The current update shape is still intentionally narrow:
 - explicit modified timestamp supplied by the caller
 
 Recurrence update currently preserves Taskwarrior-compatible recurrence
-properties. It does not expose a separate recurrence instance generator.
+properties. It does not expose a separate recurrence instance generator, and
+clients must not create future recurrence task instances themselves. The
+intended API behavior is to submit supported Taskwarrior recurrence settings
+to the backend and let Taskwarrior or TaskChampion handle recurrence
+execution.
 
 The server still has an internal product-facing dependency operation, but that
 operation is not yet part of the current HTTP surface.
