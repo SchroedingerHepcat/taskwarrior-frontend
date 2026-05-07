@@ -352,6 +352,124 @@ enum DashboardWidgetType {
   final String title;
 }
 
+DashboardWidgetType _dashboardWidgetFromJson(String raw) {
+  return DashboardWidgetType.values.firstWhere(
+    (widget) => widget.name == raw,
+    orElse: () => DashboardWidgetType.readyNow,
+  );
+}
+
+class DashboardSavedViewWidget {
+  const DashboardSavedViewWidget({
+    required this.id,
+    required this.title,
+    required this.viewId,
+    required this.filter,
+  });
+
+  final String id;
+  final String title;
+  final String viewId;
+  final TaskListFilter filter;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'id': id,
+      'title': title,
+      'view_id': viewId,
+      'filter': filter.toJson(),
+    };
+  }
+
+  factory DashboardSavedViewWidget.fromJson(Map<String, dynamic> json) {
+    return DashboardSavedViewWidget(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      viewId: json['view_id'] as String,
+      filter: TaskListFilter.fromJson(
+        (json['filter'] as Map<String, dynamic>?) ?? <String, dynamic>{},
+      ),
+    );
+  }
+}
+
+class DashboardLayout {
+  const DashboardLayout({
+    required this.id,
+    required this.name,
+    required this.enabledWidgets,
+    required this.savedViewWidgets,
+    required this.updatedAt,
+  });
+
+  factory DashboardLayout.defaultLayout({
+    required DateTime updatedAt,
+  }) {
+    return DashboardLayout(
+      id: 'local-dashboard',
+      name: 'Local dashboard',
+      enabledWidgets: DashboardWidgetType.values.toSet(),
+      savedViewWidgets: const <DashboardSavedViewWidget>[],
+      updatedAt: updatedAt.toUtc(),
+    );
+  }
+
+  final String id;
+  final String name;
+  final Set<DashboardWidgetType> enabledWidgets;
+  final List<DashboardSavedViewWidget> savedViewWidgets;
+  final DateTime updatedAt;
+
+  DashboardLayout copyWith({
+    String? name,
+    Set<DashboardWidgetType>? enabledWidgets,
+    List<DashboardSavedViewWidget>? savedViewWidgets,
+    DateTime? updatedAt,
+  }) {
+    return DashboardLayout(
+      id: id,
+      name: name ?? this.name,
+      enabledWidgets: enabledWidgets ?? this.enabledWidgets,
+      savedViewWidgets: savedViewWidgets ?? this.savedViewWidgets,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    final widgets = enabledWidgets.toList()
+      ..sort((left, right) => left.index.compareTo(right.index));
+
+    return <String, dynamic>{
+      'id': id,
+      'name': name,
+      'enabled_widgets': widgets.map((widget) => widget.name).toList(),
+      'saved_view_widgets':
+          savedViewWidgets.map((widget) => widget.toJson()).toList(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
+    };
+  }
+
+  factory DashboardLayout.fromJson(Map<String, dynamic> json) {
+    final enabledWidgets =
+        json['enabled_widgets'] as List<dynamic>? ?? <dynamic>[];
+    final savedViewWidgets =
+        json['saved_view_widgets'] as List<dynamic>? ?? <dynamic>[];
+
+    return DashboardLayout(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      enabledWidgets:
+          enabledWidgets.cast<String>().map(_dashboardWidgetFromJson).toSet(),
+      savedViewWidgets: savedViewWidgets
+          .map((widget) => DashboardSavedViewWidget.fromJson(
+                widget as Map<String, dynamic>,
+              ))
+          .toList(),
+      updatedAt: _dateFromJson(json['updated_at']) ?? DateTime.now().toUtc(),
+    );
+  }
+}
+
 enum BoardLane {
   pending('Pending', 'pending'),
   recurring('Recurring', 'recurring'),
@@ -677,6 +795,16 @@ class DashboardWidgetData {
   });
 
   final DashboardWidgetType widget;
+  final List<TaskItem> tasks;
+}
+
+class DashboardSavedViewData {
+  const DashboardSavedViewData({
+    required this.widget,
+    required this.tasks,
+  });
+
+  final DashboardSavedViewWidget widget;
   final List<TaskItem> tasks;
 }
 

@@ -351,6 +351,56 @@ void main() {
     expect(controller.listTasks.map((task) => task.title), ['Task shell']);
   });
 
+  test('dashboard layout uses saved views and shares with backend', () async {
+    final backend = _FakeBackendClient();
+    DashboardLayout? persistedLayout;
+    final controller = ShellController(
+      backend: backend,
+      saveDashboardLayout: (layout) async {
+        persistedLayout = layout;
+      },
+      clock: () => DateTime.utc(2026, 4, 12, 10),
+    );
+    addTearDown(controller.dispose);
+
+    await controller.load();
+    await controller.setListFilter(
+      const TaskListFilter(
+        project: 'Flutter',
+      ),
+    );
+    await controller.saveCurrentView('Frontend work');
+    await controller.addSavedViewToDashboard(
+      controller.savedViews.single.id,
+    );
+
+    expect(persistedLayout, isNotNull);
+    expect(persistedLayout!.savedViewWidgets, hasLength(1));
+    expect(controller.dashboardSavedViewData, hasLength(1));
+    expect(
+      controller.dashboardSavedViewData.single.tasks.map((task) => task.title),
+      ['Task shell'],
+    );
+
+    final exported = controller.exportDashboardLayoutJson();
+    await controller.saveDashboardLayoutToBackend();
+    expect(backend.dashboardLayouts, hasLength(1));
+
+    await controller.removeSavedViewFromDashboard(
+      persistedLayout!.savedViewWidgets.single.id,
+    );
+    expect(controller.dashboardLayout.savedViewWidgets, isEmpty);
+
+    await controller.importDashboardLayoutJson(exported);
+    expect(controller.dashboardLayout.savedViewWidgets, hasLength(1));
+
+    await controller.refreshBackendDashboardLayouts();
+    await controller.retrieveBackendDashboardLayout(
+      backend.dashboardLayouts.single.id,
+    );
+    expect(controller.dashboardLayout.savedViewWidgets, hasLength(1));
+  });
+
   testWidgets('task list checkbox transitions completion', (tester) async {
     tester.view.physicalSize = const Size(1000, 1000);
     tester.view.devicePixelRatio = 1;
@@ -731,6 +781,21 @@ class _FailingBackendClient implements TaskBackendClient {
   Future<void> deleteSavedView(String viewId) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<List<DashboardLayout>> listDashboardLayouts() {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> saveDashboardLayout(DashboardLayout layout) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteDashboardLayout(String layoutId) {
+    throw UnimplementedError();
+  }
 }
 
 class _FakeBackendClient implements TaskBackendClient {
@@ -747,6 +812,7 @@ class _FakeBackendClient implements TaskBackendClient {
   final List<String> updatedDescriptions = <String>[];
   final List<DateTime?> updatedDueDates = <DateTime?>[];
   final List<SavedTaskView> savedViews = <SavedTaskView>[];
+  final List<DashboardLayout> dashboardLayouts = <DashboardLayout>[];
   final List<TaskItem> _tasks = <TaskItem>[
     TaskItem(
       id: 'task-1',
@@ -816,6 +882,28 @@ class _FakeBackendClient implements TaskBackendClient {
   @override
   Future<void> deleteSavedView(String viewId) async {
     savedViews.removeWhere((view) => view.id == viewId);
+  }
+
+  @override
+  Future<List<DashboardLayout>> listDashboardLayouts() async {
+    return List<DashboardLayout>.unmodifiable(dashboardLayouts);
+  }
+
+  @override
+  Future<void> saveDashboardLayout(DashboardLayout layout) async {
+    final index = dashboardLayouts.indexWhere(
+      (item) => item.id == layout.id,
+    );
+    if (index == -1) {
+      dashboardLayouts.add(layout);
+    } else {
+      dashboardLayouts[index] = layout;
+    }
+  }
+
+  @override
+  Future<void> deleteDashboardLayout(String layoutId) async {
+    dashboardLayouts.removeWhere((layout) => layout.id == layoutId);
   }
 
   @override

@@ -1,4 +1,4 @@
-use crate::config::BackendConfig;
+use crate::config::{BackendConfig, UiStateConfig};
 use crate::error::ServiceError;
 use crate::operations::{
     api_spec, healthcheck, map_task, parse_status, HealthResponse,
@@ -19,7 +19,9 @@ use axum::{Json, Router};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::fs;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
@@ -33,6 +35,8 @@ type AppService =
 pub struct AppState {
     service: Arc<Mutex<AppService>>,
     saved_views: Arc<Mutex<BTreeMap<String, HttpSavedView>>>,
+    dashboard_layouts: Arc<Mutex<BTreeMap<String, HttpDashboardLayout>>>,
+    ui_state_path: Option<Arc<PathBuf>>,
 }
 
 impl Default for AppState {
@@ -43,6 +47,8 @@ impl Default for AppState {
                 InMemorySyncCoordinator::disabled(),
             ))),
             saved_views: Arc::new(Mutex::new(BTreeMap::new())),
+            dashboard_layouts: Arc::new(Mutex::new(BTreeMap::new())),
+            ui_state_path: None,
         }
     }
 }
@@ -59,12 +65,15 @@ impl AppState {
         } else {
             InMemorySyncCoordinator::disabled()
         };
+        let ui_state = load_ui_state(&config.ui_state)?;
 
         Ok(Self {
             service: Arc::new(Mutex::new(TaskService::new(
                 repository, sync,
             ))),
-            saved_views: Arc::new(Mutex::new(BTreeMap::new())),
+            saved_views: Arc::new(Mutex::new(ui_state.saved_views)),
+            dashboard_layouts: Arc::new(Mutex::new(ui_state.dashboard_layouts)),
+            ui_state_path: ui_state.path.map(Arc::new),
         })
     }
 }
@@ -169,6 +178,40 @@ struct SavedViewListResponse {
     views: Vec<HttpSavedView>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+pub struct HttpDashboardLayout {
+    pub id: String,
+    pub name: String,
+    pub enabled_widgets: Vec<String>,
+    pub saved_view_widgets: Vec<HttpDashboardSavedViewWidget>,
+    pub updated_at: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+pub struct HttpDashboardSavedViewWidget {
+    pub id: String,
+    pub title: String,
+    pub view_id: String,
+    pub filter: HttpSavedViewFilter,
+}
+
+#[derive(Debug, Serialize)]
+struct DashboardLayoutListResponse {
+    layouts: Vec<HttpDashboardLayout>,
+}
+
+#[derive(Default, Deserialize, Serialize)]
+struct PersistedUiState {
+    saved_views: BTreeMap<String, HttpSavedView>,
+    dashboard_layouts: BTreeMap<String, HttpDashboardLayout>,
+}
+
+struct LoadedUiState {
+    saved_views: BTreeMap<String, HttpSavedView>,
+    dashboard_layouts: BTreeMap<String, HttpDashboardLayout>,
+    path: Option<PathBuf>,
+}
+
 #[derive(Debug, Serialize)]
 struct ApiErrorBody {
     error: String,
@@ -200,6 +243,14 @@ pub fn build_router_with_state(state: AppState) -> Router {
             "/views/{id}",
             put(save_saved_view).delete(delete_saved_view),
         )
+        .route(
+            "/dashboard-layouts",
+            get(list_dashboard_layouts),
+        )
+        .route(
+            "/dashboard-layouts/{id}",
+            put(save_dashboard_layout).delete(delete_dashboard_layout),
+        )
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
@@ -212,6 +263,19 @@ pub fn build_router_with_state(state: AppState) -> Router {
 pub async fn start_server(address: SocketAddr) -> std::io::Result<()> {
     let listener = TcpListener::bind(address).await?;
     axum::serve(listener, build_router()).await
+}
+
+pub async fn start_server_with_config(
+    address: SocketAddr,
+    config: BackendConfig,
+) -> std::io::Result<()> {
+    let listener = TcpListener::bind(address).await?;
+    let state = AppState::from_config(config)
+        .await
+        .map_err(|error| std::io::Error::other(format!("{error:?}")))?;
+    axum::serve(listener, build_router_with_state(state)).await?;
+
+    Ok(())
 }
 
 async fn get_health() -> Json<HealthResponse> {
@@ -370,8 +434,11 @@ async fn save_saved_view(
     Json(view): Json<HttpSavedView>,
 ) -> Result<Json<HttpSavedView>, ServiceHttpError> {
     validate_saved_view(&view_id, &view)?;
-    let mut views = state.saved_views.lock().await;
-    views.insert(view_id, view.clone());
+    {
+        let mut views = state.saved_views.lock().await;
+        views.insert(view_id, view.clone());
+    }
+    persist_ui_state(&state).await?;
 
     Ok(Json(view))
 }
@@ -379,11 +446,116 @@ async fn save_saved_view(
 async fn delete_saved_view(
     State(state): State<AppState>,
     Path(view_id): Path<String>,
-) -> StatusCode {
-    let mut views = state.saved_views.lock().await;
-    views.remove(&view_id);
+) -> Result<StatusCode, ServiceHttpError> {
+    {
+        let mut views = state.saved_views.lock().await;
+        views.remove(&view_id);
+    }
+    persist_ui_state(&state).await?;
 
-    StatusCode::NO_CONTENT
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn list_dashboard_layouts(
+    State(state): State<AppState>
+) -> Json<DashboardLayoutListResponse> {
+    let layouts = state.dashboard_layouts.lock().await;
+
+    Json(DashboardLayoutListResponse {
+        layouts: layouts.values().cloned().collect(),
+    })
+}
+
+async fn save_dashboard_layout(
+    State(state): State<AppState>,
+    Path(layout_id): Path<String>,
+    Json(layout): Json<HttpDashboardLayout>,
+) -> Result<Json<HttpDashboardLayout>, ServiceHttpError> {
+    validate_dashboard_layout(&layout_id, &layout)?;
+    {
+        let mut layouts = state.dashboard_layouts.lock().await;
+        layouts.insert(layout_id, layout.clone());
+    }
+    persist_ui_state(&state).await?;
+
+    Ok(Json(layout))
+}
+
+async fn delete_dashboard_layout(
+    State(state): State<AppState>,
+    Path(layout_id): Path<String>,
+) -> Result<StatusCode, ServiceHttpError> {
+    {
+        let mut layouts = state.dashboard_layouts.lock().await;
+        layouts.remove(&layout_id);
+    }
+    persist_ui_state(&state).await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+fn load_ui_state(
+    config: &UiStateConfig
+) -> Result<LoadedUiState, ServiceError> {
+    match config {
+        UiStateConfig::InMemory => Ok(LoadedUiState {
+            saved_views: BTreeMap::new(),
+            dashboard_layouts: BTreeMap::new(),
+            path: None,
+        }),
+        UiStateConfig::JsonFile(path) => {
+            if !path.exists() {
+                return Ok(LoadedUiState {
+                    saved_views: BTreeMap::new(),
+                    dashboard_layouts: BTreeMap::new(),
+                    path: Some(path.clone()),
+                });
+            }
+
+            let raw = fs::read_to_string(path).map_err(ui_state_error)?;
+            let persisted: PersistedUiState =
+                serde_json::from_str(&raw).map_err(ui_state_error)?;
+
+            Ok(LoadedUiState {
+                saved_views: persisted.saved_views,
+                dashboard_layouts: persisted.dashboard_layouts,
+                path: Some(path.clone()),
+            })
+        }
+    }
+}
+
+async fn persist_ui_state(state: &AppState) -> Result<(), ServiceHttpError> {
+    let Some(path) = &state.ui_state_path else {
+        return Ok(());
+    };
+    let saved_views = state.saved_views.lock().await.clone();
+    let dashboard_layouts = state.dashboard_layouts.lock().await.clone();
+    let persisted = PersistedUiState {
+        saved_views,
+        dashboard_layouts,
+    };
+    if let Some(parent) = path
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent).map_err(ui_state_http_error)?;
+    }
+    let raw = serde_json::to_string_pretty(&persisted)
+        .map_err(ui_state_http_error)?;
+    fs::write(path.as_ref(), raw).map_err(ui_state_http_error)?;
+
+    Ok(())
+}
+
+fn ui_state_error(error: impl std::fmt::Display) -> ServiceError {
+    ServiceError::Sync(format!(
+        "ui state persistence failed: {error}"
+    ))
+}
+
+fn ui_state_http_error(error: impl std::fmt::Display) -> ServiceHttpError {
+    ServiceHttpError(ui_state_error(error))
 }
 
 fn build_task_query(
@@ -470,6 +642,68 @@ fn validate_saved_view(
         .validate()
         .map_err(|error| ServiceHttpError(ServiceError::Validation(error)))?;
     parse_datetime(view.updated_at.clone())?;
+
+    Ok(())
+}
+
+fn validate_dashboard_layout(
+    expected_id: &str,
+    layout: &HttpDashboardLayout,
+) -> Result<(), ServiceHttpError> {
+    if layout.id != expected_id {
+        return Err(ServiceHttpError(ServiceError::Sync(
+            "dashboard layout id does not match request path".to_string(),
+        )));
+    }
+
+    if layout.id.trim().is_empty() || layout.name.trim().is_empty() {
+        return Err(ServiceHttpError(ServiceError::Sync(
+            "dashboard layout id and name are required".to_string(),
+        )));
+    }
+
+    for widget in &layout.saved_view_widgets {
+        validate_dashboard_saved_view_widget(widget)?;
+    }
+    parse_datetime(layout.updated_at.clone())?;
+
+    Ok(())
+}
+
+fn validate_dashboard_saved_view_widget(
+    widget: &HttpDashboardSavedViewWidget
+) -> Result<(), ServiceHttpError> {
+    if widget.id.trim().is_empty()
+        || widget.title.trim().is_empty()
+        || widget.view_id.trim().is_empty()
+    {
+        return Err(ServiceHttpError(ServiceError::Sync(
+            "dashboard saved view widget fields are required".to_string(),
+        )));
+    }
+
+    let query = HttpTaskQueryRequest {
+        preset: widget.filter.preset.clone(),
+        statuses: widget.filter.statuses.clone(),
+        project: widget.filter.project.clone(),
+        no_project: widget.filter.no_project,
+        required_tag: widget.filter.required_tag.clone(),
+        no_tags: widget.filter.no_tags,
+        due_after: widget.filter.due_after.clone(),
+        due_before: widget.filter.due_before.clone(),
+        scheduled_after: widget.filter.scheduled_after.clone(),
+        scheduled_before: widget.filter.scheduled_before.clone(),
+        wait_after: widget.filter.wait_after.clone(),
+        wait_before: widget.filter.wait_before.clone(),
+        include_waiting: widget.filter.include_waiting,
+        include_scheduled: widget.filter.include_scheduled,
+        include_blocked: widget.filter.include_blocked,
+        reference_time: None,
+        sort: widget.filter.sort.clone(),
+    };
+    build_task_query(query, Utc::now())?
+        .validate()
+        .map_err(|error| ServiceHttpError(ServiceError::Validation(error)))?;
 
     Ok(())
 }
@@ -584,10 +818,12 @@ impl IntoResponse for ServiceHttpError {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_router, HttpCreateTaskRequest};
+    use super::{build_router, AppState, HttpCreateTaskRequest};
+    use crate::config::{BackendConfig, UiStateConfig};
     use axum::body::Body;
     use axum::http::{Method, Request, StatusCode};
     use serde_json::{json, Value};
+    use std::path::PathBuf;
     use tower::ServiceExt;
 
     #[tokio::test]
@@ -823,6 +1059,152 @@ mod tests {
         assert_eq!(delete.status(), StatusCode::NO_CONTENT);
     }
 
+    #[tokio::test]
+    async fn http_routes_support_shared_dashboard_layouts() {
+        let app = build_router();
+        let layout = json!({
+            "id": "daily-layout",
+            "name": "Daily layout",
+            "enabled_widgets": ["readyNow"],
+            "updated_at": "2026-04-12T10:00:00Z",
+            "saved_view_widgets": [{
+                "id": "dashboard-widget-1",
+                "title": "Frontend work",
+                "view_id": "frontend-work",
+                "filter": {
+                    "preset": "custom",
+                    "statuses": ["pending"],
+                    "project": "Flutter",
+                    "no_project": false,
+                    "no_tags": false,
+                    "include_waiting": true,
+                    "include_scheduled": true,
+                    "include_blocked": true,
+                    "sort": "due_asc"
+                }
+            }]
+        });
+
+        let save = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::PUT)
+                    .uri("/dashboard-layouts/daily-layout")
+                    .header("content-type", "application/json")
+                    .body(Body::from(layout.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(save.status(), StatusCode::OK);
+
+        let list = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/dashboard-layouts")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(list.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(list.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let listed: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            listed["layouts"].as_array().unwrap().len(),
+            1
+        );
+        assert_eq!(
+            listed["layouts"][0]["name"],
+            "Daily layout"
+        );
+
+        let delete = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::DELETE)
+                    .uri("/dashboard-layouts/daily-layout")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(delete.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn http_shared_configuration_persists_across_restart() {
+        let path = temp_ui_state_path();
+        let first_state = AppState::from_config(BackendConfig {
+            ui_state: UiStateConfig::JsonFile(path.clone()),
+            ..BackendConfig::default()
+        })
+        .await
+        .unwrap();
+        let first = super::build_router_with_state(first_state);
+        let saved_view = json!({
+            "id": "ready-next",
+            "name": "Ready next",
+            "updated_at": "2026-04-12T10:00:00Z",
+            "filter": {
+                "preset": "custom",
+                "statuses": ["pending"],
+                "no_project": false,
+                "no_tags": false,
+                "include_waiting": false,
+                "include_scheduled": false,
+                "include_blocked": false,
+                "sort": "due_asc"
+            }
+        });
+        let layout = json!({
+            "id": "daily-layout",
+            "name": "Daily layout",
+            "enabled_widgets": ["readyNow"],
+            "updated_at": "2026-04-12T10:00:00Z",
+            "saved_view_widgets": [{
+                "id": "dashboard-widget-1",
+                "title": "Ready next",
+                "view_id": "ready-next",
+                "filter": saved_view["filter"]
+            }]
+        });
+
+        put_json(&first, "/views/ready-next", saved_view).await;
+        put_json(
+            &first,
+            "/dashboard-layouts/daily-layout",
+            layout,
+        )
+        .await;
+
+        let second_state = AppState::from_config(BackendConfig {
+            ui_state: UiStateConfig::JsonFile(path.clone()),
+            ..BackendConfig::default()
+        })
+        .await
+        .unwrap();
+        let second = super::build_router_with_state(second_state);
+        let listed_views = get_json(&second, "/views").await;
+        let listed_layouts = get_json(&second, "/dashboard-layouts").await;
+
+        assert_eq!(
+            listed_views["views"][0]["name"],
+            "Ready next"
+        );
+        assert_eq!(
+            listed_layouts["layouts"][0]["name"],
+            "Daily layout"
+        );
+
+        let _ = std::fs::remove_file(path);
+    }
+
     async fn create_http_task(
         app: &axum::Router,
         description: &str,
@@ -851,5 +1233,60 @@ mod tests {
             .as_str()
             .unwrap()
             .to_string()
+    }
+
+    async fn put_json(
+        app: &axum::Router,
+        path: &str,
+        body: Value,
+    ) {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::PUT)
+                    .uri(path)
+                    .header("content-type", "application/json")
+                    .body(Body::from(body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    async fn get_json(
+        app: &axum::Router,
+        path: &str,
+    ) -> Value {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri(path)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+
+        serde_json::from_slice(&body).unwrap()
+    }
+
+    fn temp_ui_state_path() -> PathBuf {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+
+        std::env::temp_dir().join(format!(
+            "taskwarrior-frontend-ui-state-{}.json",
+            now
+        ))
     }
 }

@@ -15,35 +15,30 @@ class DashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final widgets = controller.enabledWidgets.toList()
+    final fixedWidgets = controller.enabledWidgets.toList()
       ..sort((left, right) => left.index.compareTo(right.index));
+    final savedViewWidgets = controller.dashboardSavedViewData;
+    final panelCount = fixedWidgets.length + savedViewWidgets.length;
 
     return ListView(
       key: const Key('dashboard-screen'),
       children: <Widget>[
         Text(
-          'Configurable dashboard',
+          'Dashboard',
           style: Theme.of(context).textTheme.titleLarge,
         ),
         const SizedBox(height: 8),
         const Text(
-          'Each widget is backed by a real server query, not a local filter.',
-        ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: DashboardWidgetType.values.map((widget) {
-            final selected = controller.enabledWidgets.contains(widget);
-
-            return FilterChip(
-              label: Text(widget.title),
-              selected: selected,
-              onSelected: (_) => controller.toggleWidget(widget),
-            );
-          }).toList(),
+          'Panels are configured from Settings and backed by server queries.',
         ),
         const SizedBox(height: 20),
+        if (panelCount == 0)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Text('No dashboard panels are enabled.'),
+            ),
+          ),
         LayoutBuilder(
           builder: (context, constraints) {
             final columns = constraints.maxWidth >= 920
@@ -61,14 +56,28 @@ class DashboardScreen extends StatelessWidget {
                 mainAxisSpacing: 12,
                 childAspectRatio: columns == 1 ? 2.0 : 1.2,
               ),
-              itemCount: widgets.length,
+              itemCount: panelCount,
               itemBuilder: (context, index) {
-                final widgetType = widgets[index];
-                final widgetData = controller.widgetDataFor(widgetType);
+                if (index < fixedWidgets.length) {
+                  final widgetType = fixedWidgets[index];
+                  final widgetData = controller.widgetDataFor(widgetType);
+
+                  return _DashboardWidgetCard(
+                    controller: controller,
+                    title: widgetData?.widget.title ?? 'Loading',
+                    keySeed: widgetData?.widget.name ?? 'loading',
+                    tasks: widgetData?.tasks,
+                    onOpenTask: onOpenTask,
+                  );
+                }
+
+                final savedData = savedViewWidgets[index - fixedWidgets.length];
 
                 return _DashboardWidgetCard(
                   controller: controller,
-                  data: widgetData,
+                  title: savedData.widget.title,
+                  keySeed: savedData.widget.id,
+                  tasks: savedData.tasks,
                   onOpenTask: onOpenTask,
                 );
               },
@@ -83,12 +92,16 @@ class DashboardScreen extends StatelessWidget {
 class _DashboardWidgetCard extends StatefulWidget {
   const _DashboardWidgetCard({
     required this.controller,
-    required this.data,
+    required this.title,
+    required this.keySeed,
+    required this.tasks,
     required this.onOpenTask,
   });
 
   final ShellController controller;
-  final DashboardWidgetData? data;
+  final String title;
+  final String keySeed;
+  final List<TaskItem>? tasks;
   final ValueChanged<String> onOpenTask;
 
   @override
@@ -106,7 +119,7 @@ class _DashboardWidgetCardState extends State<_DashboardWidgetCard> {
 
   @override
   Widget build(BuildContext context) {
-    final widgetData = widget.data;
+    final tasks = widget.tasks;
 
     return Card(
       child: Padding(
@@ -115,28 +128,28 @@ class _DashboardWidgetCardState extends State<_DashboardWidgetCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
-              widgetData?.widget.title ?? 'Loading',
+              widget.title,
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            Text('${widgetData?.tasks.length ?? 0} tasks'),
+            Text('${tasks?.length ?? 0} tasks'),
             const SizedBox(height: 16),
             Expanded(
               child: Scrollbar(
                 controller: _scrollController,
                 child: SingleChildScrollView(
                   controller: _scrollController,
-                  child: widgetData == null || widgetData.tasks.isEmpty
+                  child: tasks == null || tasks.isEmpty
                       ? const Text('No tasks matched this server query.')
                       : Column(
                           children: <Widget>[
-                            for (final task in widgetData.tasks.take(3))
+                            for (final task in tasks.take(3))
                               ListTile(
                                 contentPadding: EdgeInsets.zero,
                                 leading: Checkbox(
                                   key: Key(
                                     'dashboard-complete-'
-                                    '${widgetData.widget.name}-${task.id}',
+                                    '${widget.keySeed}-${task.id}',
                                   ),
                                   value: task.status == TaskStatus.completed,
                                   onChanged: widget.controller.isSaving

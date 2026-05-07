@@ -118,6 +118,21 @@ pub fn api_spec() -> &'static [ApiEndpoint] {
             path: "/views/{id}",
             summary: "Delete saved task view",
         },
+        ApiEndpoint {
+            method: ApiMethod::Get,
+            path: "/dashboard-layouts",
+            summary: "List saved dashboard layouts",
+        },
+        ApiEndpoint {
+            method: ApiMethod::Put,
+            path: "/dashboard-layouts/{id}",
+            summary: "Create or update saved dashboard layout",
+        },
+        ApiEndpoint {
+            method: ApiMethod::Delete,
+            path: "/dashboard-layouts/{id}",
+            summary: "Delete saved dashboard layout",
+        },
     ]
 }
 
@@ -192,7 +207,7 @@ mod tests {
     fn api_spec_covers_health_and_task_operations() {
         let endpoints = api_spec();
 
-        assert_eq!(endpoints.len(), 10);
+        assert_eq!(endpoints.len(), 13);
         assert!(endpoints.contains(&super::ApiEndpoint {
             method: ApiMethod::Get,
             path: "/tasks/{id}",

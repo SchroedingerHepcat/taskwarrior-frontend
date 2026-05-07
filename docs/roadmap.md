@@ -264,6 +264,11 @@ board views, and advanced filtering.
 - Saved task views can be created, updated, selected, deleted, imported,
   exported, persisted locally across Flutter app restarts, and selectively
   pushed to or retrieved from the backend for sharing between clients.
+- Dashboard layouts now support fixed widgets plus saved-view-backed panels,
+  local persistence across Flutter app restarts, JSON import/export, and
+  selective backend push/pull sharing.
+- Backend-shared saved views and dashboard layouts now persist across backend
+  restarts through a durable UI state file.
 - Board drag-and-drop now calls a product-facing backend board transition
   operation for pending, waiting, and completed lanes.
 - Platform-specific board polish remains part of Milestone 8.
@@ -274,14 +279,12 @@ board views, and advanced filtering.
 
 ### Remaining Work
 
-- Let dashboard configuration use saved views instead of only the current
-  fixed widget set.
 - Add frontend controls for creating and modifying every Taskwarrior-supported
   recurrence schedule option on existing tasks.
 - Add tests proving recurrence controls submit Taskwarrior-compatible
   recurrence properties without spawning child tasks in the client.
-- Expand the current user-facing advanced filter panel into saved views and
-  dashboard-backed workflow configuration.
+- Refine dashboard layout editing with ordering, naming, and platform-specific
+  presentation polish.
 
 ## Milestone 6: Self-Hosted Deployment
 
@@ -333,6 +336,9 @@ deployment and basic operational controls.
 - Internal backend sync configuration now models disabled sync, local
   TaskChampion sync-server tests, and remote sync-server connection details,
   including URL, client id, encryption secret, and plain-HTTP policy.
+- Backend UI configuration for shared saved views and dashboard layouts can be
+  persisted with `--ui-state-path` or
+  `TASKWARRIOR_FRONTEND_UI_STATE_PATH`.
 - Deployment packaging, migration, backup, and operational validation for
   durable TaskChampion storage remain open.
 - A real external TaskChampion sync-server deployment test remains open.

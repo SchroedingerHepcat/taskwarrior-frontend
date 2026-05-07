@@ -176,6 +176,37 @@ class HttpTaskBackendClient implements TaskBackendClient {
     _ensureSuccess(response);
   }
 
+  @override
+  Future<List<DashboardLayout>> listDashboardLayouts() async {
+    final response = await _client.get(_uri('/dashboard-layouts'));
+    _ensureSuccess(response);
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+
+    return (decoded['layouts'] as List<dynamic>)
+        .map((layout) => DashboardLayout.fromJson(
+              layout as Map<String, dynamic>,
+            ))
+        .toList();
+  }
+
+  @override
+  Future<void> saveDashboardLayout(DashboardLayout layout) async {
+    final response = await _client.put(
+      _uri('/dashboard-layouts/${layout.id}'),
+      headers: _jsonHeaders,
+      body: jsonEncode(layout.toJson()),
+    );
+    _ensureSuccess(response);
+  }
+
+  @override
+  Future<void> deleteDashboardLayout(String layoutId) async {
+    final response = await _client.delete(
+      _uri('/dashboard-layouts/$layoutId'),
+    );
+    _ensureSuccess(response);
+  }
+
   Map<String, String> get _jsonHeaders => <String, String>{
         'content-type': 'application/json',
       };

@@ -10,6 +10,7 @@ class LocalDevelopmentBackendClient implements TaskBackendClient {
   final Duration _latency;
   final List<TaskItem> _tasks;
   final List<SavedTaskView> _views = <SavedTaskView>[];
+  final List<DashboardLayout> _dashboardLayouts = <DashboardLayout>[];
 
   @override
   Future<BackendHealth> healthcheck() async {
@@ -170,6 +171,31 @@ class LocalDevelopmentBackendClient implements TaskBackendClient {
   Future<void> deleteSavedView(String viewId) async {
     await Future<void>.delayed(_latency);
     _views.removeWhere((view) => view.id == viewId);
+  }
+
+  @override
+  Future<List<DashboardLayout>> listDashboardLayouts() async {
+    await Future<void>.delayed(_latency);
+    return List<DashboardLayout>.unmodifiable(_dashboardLayouts);
+  }
+
+  @override
+  Future<void> saveDashboardLayout(DashboardLayout layout) async {
+    await Future<void>.delayed(_latency);
+    final index = _dashboardLayouts.indexWhere(
+      (item) => item.id == layout.id,
+    );
+    if (index == -1) {
+      _dashboardLayouts.add(layout);
+    } else {
+      _dashboardLayouts[index] = layout;
+    }
+  }
+
+  @override
+  Future<void> deleteDashboardLayout(String layoutId) async {
+    await Future<void>.delayed(_latency);
+    _dashboardLayouts.removeWhere((layout) => layout.id == layoutId);
   }
 }
 

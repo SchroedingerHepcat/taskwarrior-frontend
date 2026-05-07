@@ -11,6 +11,8 @@ Current scope:
   dropdown metadata filters, no-metadata choices, and date ranges
 - saved task views with local persistence, JSON import/export, and backend
   push/pull sharing
+- dashboard layouts with fixed widgets, saved-view-backed panels, local
+  persistence, JSON import/export, and backend push/pull sharing
 - an HTTP backend client used by the application entry point
 - a local development adapter retained for widget tests and local UI work
 

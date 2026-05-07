@@ -29,4 +29,10 @@ abstract interface class TaskBackendClient {
   Future<void> saveSavedView(SavedTaskView view);
 
   Future<void> deleteSavedView(String viewId);
+
+  Future<List<DashboardLayout>> listDashboardLayouts();
+
+  Future<void> saveDashboardLayout(DashboardLayout layout);
+
+  Future<void> deleteDashboardLayout(String layoutId);
 }

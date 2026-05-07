@@ -36,6 +36,9 @@ The current HTTP surface covers:
 - `GET /views`
 - `PUT /views/{id}`
 - `DELETE /views/{id}`
+- `GET /dashboard-layouts`
+- `PUT /dashboard-layouts/{id}`
+- `DELETE /dashboard-layouts/{id}`
 
 The current product-facing operations cover:
 
@@ -50,6 +53,9 @@ The current product-facing operations cover:
 - frontend-visible advanced list filtering for the current query fields
 - local saved task views backed by product-facing query definitions
 - optional backend sharing for saved task views
+- dashboard layouts backed by fixed query widgets and saved task views
+- local dashboard layout persistence, import/export, and optional backend
+  sharing
 
 The current query shape uses product-level fields rather than raw
 TaskChampion objects or file-oriented Taskwarrior concepts:
@@ -79,6 +85,17 @@ local saved views for client restart behavior and may selectively push or pull
 individual views through the backend `/views` endpoints for sharing between
 clients. These endpoints store view definitions only; they do not store tasks,
 TaskChampion replica data, or Taskwarrior data files.
+
+Dashboard layouts are also separate from task storage. A dashboard layout
+contains an id, name, enabled fixed widget ids, saved-view-backed dashboard
+widgets, update timestamp, and product-facing query filters copied from saved
+views. Flutter persists the active layout locally and may selectively push or
+pull layouts through `/dashboard-layouts`. These endpoints store layout
+definitions only; dashboard task data is still loaded through `/tasks/query`.
+The backend persists shared saved views and dashboard layouts to a JSON UI
+state file when configured with durable UI state. The server binary uses
+`taskwarrior-frontend-ui-state.json` by default, and the path can be changed
+with `--ui-state-path` or `TASKWARRIOR_FRONTEND_UI_STATE_PATH`.
 
 The current update shape is still intentionally narrow:
 
@@ -124,6 +141,8 @@ The server crate now separates:
 - TaskChampion sync configuration behind Rust service boundaries, covering
   disabled sync, local TaskChampion sync-server tests, and remote sync-server
   connection details
+- durable backend UI configuration for shared saved views and dashboard
+  layouts, separate from TaskChampion task storage
 
 The server boundary now proves that local TaskChampion sync can move tasks
 between two backend replicas without exposing TaskChampion internals to

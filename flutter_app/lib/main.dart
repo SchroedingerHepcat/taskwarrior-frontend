@@ -16,6 +16,7 @@ Future<void> main() async {
   final savedBaseUrl = await store.loadBackendUrl();
   final themePreference = await store.loadThemePreference();
   final savedViews = await store.loadSavedViews();
+  final dashboardLayout = await store.loadDashboardLayout();
   final baseUrl = compileTimeBaseUrl.trim().isNotEmpty
       ? compileTimeBaseUrl.trim()
       : savedBaseUrl;
@@ -30,6 +31,8 @@ Future<void> main() async {
       saveThemePreference: store.saveThemePreference,
       initialSavedViews: savedViews,
       saveSavedViews: store.saveSavedViews,
+      initialDashboardLayout: dashboardLayout,
+      saveDashboardLayout: store.saveDashboardLayout,
     ),
   );
 }

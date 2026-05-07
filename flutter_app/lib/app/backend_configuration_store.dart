@@ -9,6 +9,7 @@ class BackendConfigurationStore {
   static const _backendUrlKey = 'backend_api_url';
   static const _themePreferenceKey = 'theme_preference';
   static const _savedViewsKey = 'saved_task_views';
+  static const _dashboardLayoutKey = 'dashboard_layout';
 
   Future<String?> loadBackendUrl() async {
     final preferences = await SharedPreferences.getInstance();
@@ -57,6 +58,26 @@ class BackendConfigurationStore {
     await preferences.setString(
       _savedViewsKey,
       jsonEncode(views.map((view) => view.toJson()).toList()),
+    );
+  }
+
+  Future<DashboardLayout?> loadDashboardLayout() async {
+    final preferences = await SharedPreferences.getInstance();
+    final value = preferences.getString(_dashboardLayoutKey);
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+
+    final decoded = jsonDecode(value) as Map<String, dynamic>;
+
+    return DashboardLayout.fromJson(decoded);
+  }
+
+  Future<void> saveDashboardLayout(DashboardLayout layout) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(
+      _dashboardLayoutKey,
+      jsonEncode(layout.toJson()),
     );
   }
 }

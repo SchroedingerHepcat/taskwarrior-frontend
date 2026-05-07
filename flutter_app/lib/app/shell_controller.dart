@@ -16,6 +16,8 @@ class ShellController extends ChangeNotifier {
     Future<void> Function(AppThemePreference preference)? saveThemePreference,
     List<SavedTaskView> savedViews = const <SavedTaskView>[],
     Future<void> Function(List<SavedTaskView> views)? saveSavedViews,
+    DashboardLayout? dashboardLayout,
+    Future<void> Function(DashboardLayout layout)? saveDashboardLayout,
     DateTime Function()? clock,
   })  : _backend = backend,
         _backendUrl = backendUrl,
@@ -25,6 +27,11 @@ class ShellController extends ChangeNotifier {
         _saveThemePreference = saveThemePreference,
         _savedViews = List<SavedTaskView>.from(savedViews),
         _saveSavedViews = saveSavedViews,
+        _dashboardLayout = dashboardLayout ??
+            DashboardLayout.defaultLayout(
+              updatedAt: (clock ?? DateTime.now)().toUtc(),
+            ),
+        _saveDashboardLayout = saveDashboardLayout,
         _clock = clock ?? DateTime.now;
 
   TaskBackendClient? _backend;
@@ -34,6 +41,7 @@ class ShellController extends ChangeNotifier {
   final Future<void> Function(AppThemePreference preference)?
       _saveThemePreference;
   final Future<void> Function(List<SavedTaskView> views)? _saveSavedViews;
+  final Future<void> Function(DashboardLayout layout)? _saveDashboardLayout;
   final DateTime Function() _clock;
 
   bool _isLoading = true;
@@ -42,14 +50,16 @@ class ShellController extends ChangeNotifier {
   BackendHealth? _health;
   List<TaskItem> _allTasks = const <TaskItem>[];
   List<TaskItem> _listTasks = const <TaskItem>[];
-  final Set<DashboardWidgetType> _enabledWidgets =
-      DashboardWidgetType.values.toSet();
   final Map<DashboardWidgetType, DashboardWidgetData> _dashboardWidgets =
       <DashboardWidgetType, DashboardWidgetData>{};
+  List<DashboardSavedViewData> _dashboardSavedViewData =
+      const <DashboardSavedViewData>[];
   TaskListMode _listMode = TaskListMode.all;
   TaskListFilter _listFilter = const TaskListFilter();
   List<SavedTaskView> _savedViews;
   List<SavedTaskView> _backendSavedViews = const <SavedTaskView>[];
+  List<DashboardLayout> _backendDashboardLayouts = const <DashboardLayout>[];
+  DashboardLayout _dashboardLayout;
   String? _selectedSavedViewId;
   AppThemePreference _themePreference;
   String? _selectedTaskId;
@@ -71,7 +81,19 @@ class ShellController extends ChangeNotifier {
   String? get selectedSavedViewId => _selectedSavedViewId;
   AppThemePreference get themePreference => _themePreference;
   String? get backendUrl => _backendUrl;
-  Set<DashboardWidgetType> get enabledWidgets => Set.of(_enabledWidgets);
+  DashboardLayout get dashboardLayout => _dashboardLayout;
+  Set<DashboardWidgetType> get enabledWidgets {
+    return Set.of(_dashboardLayout.enabledWidgets);
+  }
+
+  List<DashboardSavedViewData> get dashboardSavedViewData {
+    return List.unmodifiable(_dashboardSavedViewData);
+  }
+
+  List<DashboardLayout> get backendDashboardLayouts {
+    return List.unmodifiable(_backendDashboardLayouts);
+  }
+
   String? get boardIntent => _boardIntent;
 
   String get connectionLabel {
@@ -325,15 +347,129 @@ class ShellController extends ChangeNotifier {
   }
 
   Future<void> toggleWidget(DashboardWidgetType widget) async {
-    if (_enabledWidgets.contains(widget)) {
-      _enabledWidgets.remove(widget);
+    final enabledWidgets = Set<DashboardWidgetType>.of(
+      _dashboardLayout.enabledWidgets,
+    );
+
+    if (enabledWidgets.contains(widget)) {
+      enabledWidgets.remove(widget);
       _dashboardWidgets.remove(widget);
     } else {
-      _enabledWidgets.add(widget);
+      enabledWidgets.add(widget);
     }
 
+    _dashboardLayout = _dashboardLayout.copyWith(
+      enabledWidgets: enabledWidgets,
+      updatedAt: _clock().toUtc(),
+    );
+    await _persistDashboardLayout();
     await _refreshDashboardWidgets();
     notifyListeners();
+  }
+
+  Future<void> addSavedViewToDashboard(String viewId) async {
+    final view = _savedViews.firstWhere((view) => view.id == viewId);
+    final now = _clock().toUtc();
+    final widget = DashboardSavedViewWidget(
+      id: _newDashboardWidgetId(now),
+      title: view.name,
+      viewId: view.id,
+      filter: view.filter,
+    );
+    _dashboardLayout = _dashboardLayout.copyWith(
+      savedViewWidgets: <DashboardSavedViewWidget>[
+        ..._dashboardLayout.savedViewWidgets,
+        widget,
+      ],
+      updatedAt: now,
+    );
+    await _persistDashboardLayout();
+    await _refreshDashboardWidgets();
+    notifyListeners();
+  }
+
+  Future<void> removeSavedViewFromDashboard(String widgetId) async {
+    _dashboardLayout = _dashboardLayout.copyWith(
+      savedViewWidgets: _dashboardLayout.savedViewWidgets
+          .where((widget) => widget.id != widgetId)
+          .toList(),
+      updatedAt: _clock().toUtc(),
+    );
+    await _persistDashboardLayout();
+    await _refreshDashboardWidgets();
+    notifyListeners();
+  }
+
+  String exportDashboardLayoutJson() {
+    return const JsonEncoder.withIndent('  ').convert(
+      <String, dynamic>{
+        'version': 1,
+        'layout': _dashboardLayout.toJson(),
+      },
+    );
+  }
+
+  Future<void> importDashboardLayoutJson(String raw) async {
+    try {
+      _dashboardLayout = _decodeDashboardLayout(raw);
+      await _persistDashboardLayout();
+      await _refreshDashboardWidgets();
+      notifyListeners();
+    } catch (error) {
+      _errorMessage = 'Could not import dashboard layout: $error';
+      notifyListeners();
+    }
+  }
+
+  Future<void> refreshBackendDashboardLayouts() async {
+    final backend = _backend;
+    if (backend == null) {
+      _errorMessage = 'Enter the backend API URL in Settings to connect.';
+      notifyListeners();
+      return;
+    }
+
+    try {
+      _backendDashboardLayouts = await backend.listDashboardLayouts();
+      notifyListeners();
+    } catch (error) {
+      _errorMessage = _humanReadableError(error);
+      notifyListeners();
+    }
+  }
+
+  Future<void> saveDashboardLayoutToBackend() async {
+    final backend = _backend;
+    if (backend == null) {
+      _errorMessage = 'Enter the backend API URL in Settings to connect.';
+      notifyListeners();
+      return;
+    }
+
+    await backend.saveDashboardLayout(_dashboardLayout);
+    await refreshBackendDashboardLayouts();
+  }
+
+  Future<void> retrieveBackendDashboardLayout(String layoutId) async {
+    final layout = _backendDashboardLayouts.firstWhere(
+      (layout) => layout.id == layoutId,
+    );
+    _dashboardLayout = layout;
+    await _persistDashboardLayout();
+    await _refreshDashboardWidgets();
+    notifyListeners();
+  }
+
+  Future<void> deleteBackendDashboardLayout(String layoutId) async {
+    final backend = _backend;
+    if (backend == null) {
+      _errorMessage = 'Enter the backend API URL in Settings to connect.';
+      notifyListeners();
+      return;
+    }
+
+    await backend.deleteDashboardLayout(layoutId);
+    await refreshBackendDashboardLayouts();
   }
 
   Future<void> configureBackendUrl(String baseUrl) async {
@@ -414,6 +550,7 @@ class ShellController extends ChangeNotifier {
     try {
       _health = await backend.healthcheck();
       _backendSavedViews = await backend.listSavedViews();
+      _backendDashboardLayouts = await backend.listDashboardLayouts();
       await _refreshTaskViews();
       await _refreshDashboardWidgets();
     } catch (error) {
@@ -458,8 +595,9 @@ class ShellController extends ChangeNotifier {
   Future<void> _refreshDashboardWidgets() async {
     final referenceTime = _clock().toUtc();
     _dashboardWidgets.clear();
+    _dashboardSavedViewData = const <DashboardSavedViewData>[];
 
-    for (final widget in _enabledWidgets) {
+    for (final widget in _dashboardLayout.enabledWidgets) {
       final backend = _backend;
       if (backend == null) {
         return;
@@ -476,6 +614,25 @@ class ShellController extends ChangeNotifier {
         tasks: tasks,
       );
     }
+
+    final savedViewData = <DashboardSavedViewData>[];
+    for (final widget in _dashboardLayout.savedViewWidgets) {
+      final backend = _backend;
+      if (backend == null) {
+        return;
+      }
+
+      final tasks = await backend.queryTasks(
+        widget.filter.toQuery(referenceTime: referenceTime),
+      );
+      savedViewData.add(
+        DashboardSavedViewData(
+          widget: widget,
+          tasks: tasks,
+        ),
+      );
+    }
+    _dashboardSavedViewData = savedViewData;
   }
 
   Future<void> _runMutation(Future<void> Function() action) async {
@@ -507,8 +664,16 @@ class ShellController extends ChangeNotifier {
     await _saveSavedViews?.call(List<SavedTaskView>.unmodifiable(_savedViews));
   }
 
+  Future<void> _persistDashboardLayout() async {
+    await _saveDashboardLayout?.call(_dashboardLayout);
+  }
+
   String _newSavedViewId(DateTime now) {
     return 'view-${now.microsecondsSinceEpoch}';
+  }
+
+  String _newDashboardWidgetId(DateTime now) {
+    return 'dashboard-widget-${now.microsecondsSinceEpoch}';
   }
 
   List<SavedTaskView> _decodeSavedViews(String raw) {
@@ -535,6 +700,20 @@ class ShellController extends ChangeNotifier {
     }
 
     throw const FormatException('expected a saved view or saved view list');
+  }
+
+  DashboardLayout _decodeDashboardLayout(String raw) {
+    final decoded = jsonDecode(raw);
+    if (decoded is Map<String, dynamic>) {
+      final layout = decoded['layout'];
+      if (layout is Map<String, dynamic>) {
+        return DashboardLayout.fromJson(layout);
+      }
+
+      return DashboardLayout.fromJson(decoded);
+    }
+
+    throw const FormatException('expected a dashboard layout');
   }
 
   String _humanReadableError(Object error) {

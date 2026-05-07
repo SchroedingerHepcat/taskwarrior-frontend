@@ -18,6 +18,8 @@ class TaskwarriorFrontendApp extends StatefulWidget {
     this.saveThemePreference,
     this.initialSavedViews = const <SavedTaskView>[],
     this.saveSavedViews,
+    this.initialDashboardLayout,
+    this.saveDashboardLayout,
   });
 
   final TaskBackendClient? backend;
@@ -29,6 +31,8 @@ class TaskwarriorFrontendApp extends StatefulWidget {
       saveThemePreference;
   final List<SavedTaskView> initialSavedViews;
   final Future<void> Function(List<SavedTaskView> views)? saveSavedViews;
+  final DashboardLayout? initialDashboardLayout;
+  final Future<void> Function(DashboardLayout layout)? saveDashboardLayout;
 
   @override
   State<TaskwarriorFrontendApp> createState() => _TaskwarriorFrontendAppState();
@@ -49,6 +53,8 @@ class _TaskwarriorFrontendAppState extends State<TaskwarriorFrontendApp> {
       saveThemePreference: widget.saveThemePreference,
       savedViews: widget.initialSavedViews,
       saveSavedViews: widget.saveSavedViews,
+      dashboardLayout: widget.initialDashboardLayout,
+      saveDashboardLayout: widget.saveDashboardLayout,
     )..load();
   }
 

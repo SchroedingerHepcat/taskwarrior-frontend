@@ -1,5 +1,6 @@
 import 'package:flutter_app/app/backend_configuration_store.dart';
 import 'package:flutter_app/app/app_theme.dart';
+import 'package:flutter_app/models/shell_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -24,5 +25,25 @@ void main() {
     await store.saveThemePreference(AppThemePreference.system);
 
     expect(await store.loadThemePreference(), AppThemePreference.system);
+  });
+
+  test('backend configuration store persists dashboard layout', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final store = BackendConfigurationStore();
+    final layout = DashboardLayout.defaultLayout(
+      updatedAt: DateTime.utc(2026, 4, 12),
+    ).copyWith(
+      enabledWidgets: <DashboardWidgetType>{DashboardWidgetType.readyNow},
+    );
+
+    expect(await store.loadDashboardLayout(), isNull);
+
+    await store.saveDashboardLayout(layout);
+
+    final loaded = await store.loadDashboardLayout();
+    expect(loaded?.id, layout.id);
+    expect(loaded?.enabledWidgets, <DashboardWidgetType>{
+      DashboardWidgetType.readyNow,
+    });
   });
 }

@@ -259,6 +259,14 @@ The intended layer responsibilities are:
   may be stored locally in Flutter for client restart behavior and shared
   through backend endpoints for cross-client reuse, but they must not become an
   independent task database or expose TaskChampion internals.
+- Dashboard layouts are product-facing presentation and query configuration,
+  not task storage. They may reference fixed backend query widgets and saved
+  task views, and they may be stored locally or shared through backend
+  endpoints, but task data must still come through backend task queries.
+- Backend-shared saved views and dashboard layouts are durable UI
+  configuration, not task storage. Persisting them outside TaskChampion is
+  acceptable because they do not mutate or replace Taskwarrior-compatible task
+  data.
 - Recurrence instance creation is owned by Taskwarrior or TaskChampion
   semantics. This application should expose recurring tasks, allow users to
   create recurrence settings on existing tasks, and allow users to modify
@@ -351,6 +359,10 @@ code and tests in this repository:
   instead of reimplementing Taskwarrior filtering in Flutter
 - local saved task views with create, edit, select, delete, import, export,
   and backend push/pull behavior based on product-facing query definitions
+- local dashboard layout configuration with fixed widgets, saved-view-backed
+  panels, import/export, local persistence, and backend push/pull behavior
+- backend restart persistence for shared saved views and dashboard layouts
+  through a durable UI state file
 - an architectural decision to support an external TaskChampion sync server as
   the first-party task sync coordinator
 
