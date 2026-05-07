@@ -77,6 +77,7 @@ class LocalDevelopmentBackendClient implements TaskBackendClient {
       scheduled: current.scheduled,
       waitUntil: current.waitUntil,
       end: input.status == TaskStatus.completed ? DateTime.now().toUtc() : null,
+      recurrence: current.recurrence,
     );
     _tasks[index] = updated;
     return updated;
@@ -115,6 +116,8 @@ class LocalDevelopmentBackendClient implements TaskBackendClient {
           input.clearScheduled ? null : input.scheduled ?? current.scheduled,
       waitUntil: input.clearWait ? null : input.waitUntil ?? current.waitUntil,
       end: current.end,
+      recurrence:
+          input.clearRecurrence ? null : input.recurrence ?? current.recurrence,
     );
     _tasks[index] = updated;
     return updated;
@@ -145,6 +148,7 @@ class LocalDevelopmentBackendClient implements TaskBackendClient {
       scheduled: current.scheduled,
       waitUntil: input.lane == BoardLane.waiting ? input.waitUntil : null,
       end: status == TaskStatus.completed ? DateTime.now().toUtc() : null,
+      recurrence: current.recurrence,
     );
     _tasks[index] = updated;
     return updated;

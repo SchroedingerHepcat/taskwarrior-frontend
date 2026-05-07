@@ -277,10 +277,10 @@ The intended layer responsibilities are:
   create recurrence settings on existing tasks, and allow users to modify
   recurrence options. The client and this project's backend must not spawn
   future recurring task instances themselves.
-- The product interface should eventually expose every recurrence schedule
-  option supported by Taskwarrior, but the app should still store and submit
-  those options through Taskwarrior-compatible recurrence properties rather
-  than inventing a separate recurrence engine.
+- The product interface exposes recurrence editing by submitting
+  Taskwarrior-compatible recurrence properties. Typeable `recur` input remains
+  the complete schedule-option escape hatch; the app must not invent a
+  separate recurrence engine.
 
 ## What Still Needs Proof
 
@@ -361,13 +361,17 @@ code and tests in this repository:
   product-facing client operations rather than Taskwarrior storage concepts
 - full end-to-end create, update, complete, and query flows from Flutter to the
   Rust backend over HTTP
+- frontend recurrence controls that submit `recur`, `rtype`, `until`,
+  `parent`, `mask`, and `imask` through the backend client without spawning
+  recurrence child tasks in Flutter
 - a frontend advanced filter panel that sends product-facing query fields,
   including project, no-project, tag, no-tags, and date ranges, to the backend
   instead of reimplementing Taskwarrior filtering in Flutter
 - local saved task views with create, edit, select, delete, import, export,
   and backend push/pull behavior based on product-facing query definitions
 - local dashboard layout configuration with fixed widgets, saved-view-backed
-  panels, import/export, local persistence, and backend push/pull behavior
+  panels, naming, ordering, import/export, local persistence, and backend
+  push/pull behavior
 - backend restart persistence for shared saved views and dashboard layouts
   through a durable UI state file
 - an architectural decision to support an external TaskChampion sync server as
@@ -375,8 +379,6 @@ code and tests in this repository:
 
 The following areas are still open and should not be treated as proven yet:
 
-- recurrence creation and editing UI for every Taskwarrior-supported schedule
-  option
 - proof that Taskwarrior or TaskChampion creates recurrence child tasks through
   their own semantics after this app sets recurrence properties
 - scheduled and waiting lifecycle behavior beyond timestamp mapping and

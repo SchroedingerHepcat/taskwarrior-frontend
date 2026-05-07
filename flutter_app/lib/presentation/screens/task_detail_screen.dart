@@ -5,6 +5,15 @@ import 'package:flutter/material.dart';
 import '../../app/shell_controller.dart';
 import '../../models/shell_models.dart';
 
+const List<String> _recurrencePresets = <String>[
+  'daily',
+  'weekly',
+  'monthly',
+  'quarterly',
+  'yearly',
+  '2weeks',
+];
+
 class TaskDetailScreen extends StatefulWidget {
   const TaskDetailScreen({
     super.key,
@@ -25,10 +34,16 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   late final TextEditingController _tagsController;
   late final TextEditingController _dueController;
   late final TextEditingController _waitController;
+  late final TextEditingController _recurController;
+  late final TextEditingController _recurUntilController;
+  late final TextEditingController _recurParentController;
+  late final TextEditingController _recurMaskController;
+  late final TextEditingController _recurImaskController;
   late final TextEditingController _annotationController;
   Timer? _autosaveTimer;
   String? _boundTaskId;
   TaskItem? _undoSnapshot;
+  String? _recurrenceRtype;
   bool _isBinding = false;
 
   @override
@@ -39,6 +54,11 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     _tagsController = TextEditingController();
     _dueController = TextEditingController();
     _waitController = TextEditingController();
+    _recurController = TextEditingController();
+    _recurUntilController = TextEditingController();
+    _recurParentController = TextEditingController();
+    _recurMaskController = TextEditingController();
+    _recurImaskController = TextEditingController();
     _annotationController = TextEditingController();
     for (final controller in <TextEditingController>[
       _descriptionController,
@@ -46,6 +66,11 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       _tagsController,
       _dueController,
       _waitController,
+      _recurController,
+      _recurUntilController,
+      _recurParentController,
+      _recurMaskController,
+      _recurImaskController,
     ]) {
       controller.addListener(_scheduleAutosave);
     }
@@ -66,6 +91,11 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     _tagsController.dispose();
     _dueController.dispose();
     _waitController.dispose();
+    _recurController.dispose();
+    _recurUntilController.dispose();
+    _recurParentController.dispose();
+    _recurMaskController.dispose();
+    _recurImaskController.dispose();
     _annotationController.dispose();
     super.dispose();
   }
@@ -84,6 +114,12 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     _tagsController.text = task.tags.join(', ');
     _dueController.text = _dateField(task.due);
     _waitController.text = _dateField(task.waitUntil);
+    _recurController.text = task.recurrence?.recur ?? '';
+    _recurrenceRtype = task.recurrence?.rtype;
+    _recurUntilController.text = _dateField(task.recurrence?.until);
+    _recurParentController.text = task.recurrence?.parent ?? '';
+    _recurMaskController.text = task.recurrence?.mask ?? '';
+    _recurImaskController.text = task.recurrence?.imask ?? '';
     _annotationController.clear();
     _isBinding = false;
   }
@@ -225,6 +261,8 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
             ),
           ),
           const SizedBox(height: 16),
+          _recurrenceSection(task),
+          const SizedBox(height: 16),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(24),
@@ -255,6 +293,133 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _recurrenceSection(TaskItem task) {
+    return Card(
+      key: const Key('detail-recurrence-card'),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'Recurrence',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Enter Taskwarrior recurrence values. The client submits these '
+              'properties only; Taskwarrior or TaskChampion creates any child '
+              'tasks.',
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: <Widget>[
+                for (final preset in _recurrencePresets)
+                  ActionChip(
+                    key: Key('detail-recur-preset-$preset'),
+                    label: Text(preset),
+                    onPressed: () {
+                      _recurController.text = preset;
+                    },
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              key: const Key('detail-recur-field'),
+              controller: _recurController,
+              decoration: const InputDecoration(
+                labelText: 'Taskwarrior recur value',
+                hintText: 'daily, weekly, 2weeks, monthly, yearly, ...',
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              key: const Key('detail-recur-rtype-field'),
+              initialValue: _knownRtype(_recurrenceRtype),
+              decoration: const InputDecoration(
+                labelText: 'Recurrence type',
+              ),
+              items: const <DropdownMenuItem<String>>[
+                DropdownMenuItem<String>(
+                  value: 'periodic',
+                  child: Text('periodic'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'chained',
+                  child: Text('chained'),
+                ),
+              ],
+              onChanged: (value) {
+                if (_isBinding) {
+                  return;
+                }
+
+                setState(() {
+                  _recurrenceRtype = value;
+                });
+                _scheduleAutosave();
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const Key('detail-recur-until-field'),
+              controller: _recurUntilController,
+              decoration: InputDecoration(
+                labelText: 'Until',
+                hintText: 'YYYY-M-D',
+                suffixIcon: IconButton(
+                  key: const Key('detail-recur-until-picker-button'),
+                  onPressed: () => _pickDate(_recurUntilController),
+                  icon: const Icon(Icons.calendar_month_outlined),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ExpansionTile(
+              key: const Key('detail-recur-advanced-panel'),
+              tilePadding: EdgeInsets.zero,
+              title: const Text('Advanced Taskwarrior recurrence fields'),
+              children: <Widget>[
+                TextField(
+                  key: const Key('detail-recur-parent-field'),
+                  controller: _recurParentController,
+                  decoration: const InputDecoration(
+                    labelText: 'Parent UUID',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  key: const Key('detail-recur-mask-field'),
+                  controller: _recurMaskController,
+                  decoration: const InputDecoration(labelText: 'Mask'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  key: const Key('detail-recur-imask-field'),
+                  controller: _recurImaskController,
+                  decoration: const InputDecoration(labelText: 'Imask'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const Key('detail-clear-recurrence-button'),
+                onPressed: task.recurrence == null ? null : _clearRecurrence,
+                icon: const Icon(Icons.event_busy_outlined),
+                label: const Text('Clear recurrence'),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -328,8 +493,12 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         tags: snapshot.tags,
         due: snapshot.due,
         clearDue: snapshot.due == null,
+        scheduled: snapshot.scheduled,
+        clearScheduled: snapshot.scheduled == null,
         waitUntil: snapshot.waitUntil,
         clearWait: snapshot.waitUntil == null,
+        recurrence: snapshot.recurrence,
+        clearRecurrence: snapshot.recurrence == null,
       ),
     );
     if (mounted) {
@@ -346,7 +515,8 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   }) {
     final due = _dateEdit(_dueController.text);
     final wait = _dateEdit(_waitController.text);
-    if (!due.canSave || !wait.canSave) {
+    final recurrence = _recurrenceEdit();
+    if (!due.canSave || !wait.canSave || !recurrence.canSave) {
       return null;
     }
 
@@ -361,8 +531,25 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       clearDue: due.shouldClear,
       waitUntil: wait.value,
       clearWait: wait.shouldClear,
+      recurrence: recurrence.value,
+      clearRecurrence: recurrence.shouldClear,
       addAnnotation: addAnnotation,
     );
+  }
+
+  Future<void> _clearRecurrence() async {
+    _autosaveTimer?.cancel();
+    await widget.controller.updateSelectedTask(
+      const UpdateTaskInput(clearRecurrence: true),
+    );
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _boundTaskId = null;
+    });
+    _bindTask();
   }
 
   List<String> _parseTags(String raw) {
@@ -393,6 +580,61 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     }
 
     return _DateEdit.value(parsed);
+  }
+
+  _RecurrenceEdit _recurrenceEdit() {
+    final recur = _recurController.text.trim();
+    final rtype = _emptyToNull(_recurrenceRtype);
+    final until = _dateEdit(_recurUntilController.text);
+    if (!until.canSave) {
+      return const _RecurrenceEdit.incomplete();
+    }
+
+    final parent = _emptyToNull(_recurParentController.text);
+    final mask = _emptyToNull(_recurMaskController.text);
+    final imask = _emptyToNull(_recurImaskController.text);
+    final hasAnyField = recur.isNotEmpty ||
+        rtype != null ||
+        until.value != null ||
+        parent != null ||
+        mask != null ||
+        imask != null;
+
+    if (!hasAnyField) {
+      return const _RecurrenceEdit.empty();
+    }
+
+    if (recur.isEmpty) {
+      return const _RecurrenceEdit.incomplete();
+    }
+
+    return _RecurrenceEdit.value(
+      TaskRecurrence(
+        recur: recur,
+        rtype: rtype,
+        until: until.value,
+        parent: parent,
+        mask: mask,
+        imask: imask,
+      ),
+    );
+  }
+
+  String? _emptyToNull(String? raw) {
+    final trimmed = raw?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+
+    return trimmed;
+  }
+
+  String? _knownRtype(String? value) {
+    if (value == 'periodic' || value == 'chained') {
+      return value;
+    }
+
+    return null;
   }
 
   String _dateField(DateTime? date) {
@@ -439,6 +681,26 @@ class _DateEdit {
         shouldClear = false;
 
   final DateTime? value;
+  final bool canSave;
+  final bool shouldClear;
+}
+
+class _RecurrenceEdit {
+  const _RecurrenceEdit.value(this.value)
+      : canSave = true,
+        shouldClear = false;
+
+  const _RecurrenceEdit.empty()
+      : value = null,
+        canSave = true,
+        shouldClear = false;
+
+  const _RecurrenceEdit.incomplete()
+      : value = null,
+        canSave = false,
+        shouldClear = false;
+
+  final TaskRecurrence? value;
   final bool canSave;
   final bool shouldClear;
 }

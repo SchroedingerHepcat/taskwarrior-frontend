@@ -709,6 +709,143 @@ void main() {
     expect(find.byType(DatePickerDialog), findsOneWidget);
   });
 
+  testWidgets('task detail submits recurrence without child tasks',
+      (tester) async {
+    tester.view.physicalSize = const Size(1000, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final backend = _FakeBackendClient();
+
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: backend,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(ShellSection.detail.icon));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('detail-recur-field')),
+      '2weeks',
+    );
+    await tester.tap(find.byKey(const Key('detail-recur-rtype-field')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('periodic').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('detail-recur-until-field')),
+      '2026-5-8',
+    );
+    await tester.tap(find.byKey(const Key('detail-recur-advanced-panel')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('detail-recur-parent-field')),
+      '11111111-1111-1111-1111-111111111111',
+    );
+    await tester.enterText(
+      find.byKey(const Key('detail-recur-mask-field')),
+      '+',
+    );
+    await tester.enterText(
+      find.byKey(const Key('detail-recur-imask-field')),
+      '-',
+    );
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pumpAndSettle();
+
+    final recurrence = backend.updatedRecurrences.last;
+    expect(recurrence?.recur, '2weeks');
+    expect(recurrence?.rtype, 'periodic');
+    expect(recurrence?.until, DateTime.utc(2026, 5, 8));
+    expect(
+      recurrence?.parent,
+      '11111111-1111-1111-1111-111111111111',
+    );
+    expect(recurrence?.mask, '+');
+    expect(recurrence?.imask, '-');
+    expect(backend.createdDescriptions, isEmpty);
+  });
+
+  testWidgets('task detail clears recurrence without child tasks',
+      (tester) async {
+    tester.view.physicalSize = const Size(1000, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final backend = _FakeBackendClient();
+
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: backend,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(ShellSection.detail.icon));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('detail-recur-field')),
+      'weekly',
+    );
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('detail-clear-recurrence-button')));
+    await tester.pumpAndSettle();
+
+    expect(backend.clearedRecurrences.last, isTrue);
+    expect(backend.updatedRecurrences.last, isNull);
+    expect(backend.createdDescriptions, isEmpty);
+  });
+
+  test('dashboard layout supports naming and saved view ordering', () async {
+    final backend = _FakeBackendClient();
+    DashboardLayout? persistedLayout;
+    final controller = ShellController(
+      backend: backend,
+      saveDashboardLayout: (layout) async {
+        persistedLayout = layout;
+      },
+      clock: () => DateTime.utc(2026, 4, 12, 10),
+    );
+    addTearDown(controller.dispose);
+
+    await controller.load();
+    await controller.setListFilter(
+      const TaskListFilter(project: 'Flutter'),
+    );
+    await controller.saveCurrentView('Frontend work');
+    await controller.setListFilter(
+      const TaskListFilter(requiredTag: 'dashboard'),
+    );
+    await controller.saveCurrentView('Dashboard work');
+    await controller.addSavedViewToDashboard(controller.savedViews.first.id);
+    await controller.addSavedViewToDashboard(controller.savedViews.last.id);
+
+    final first = controller.dashboardLayout.savedViewWidgets.first;
+    final second = controller.dashboardLayout.savedViewWidgets.last;
+    await controller.renameDashboardLayout('Focused dashboard');
+    await controller.renameDashboardSavedViewWidget(
+      widgetId: first.id,
+      title: 'Today',
+    );
+    await controller.moveDashboardSavedViewWidget(
+      widgetId: first.id,
+      direction: 1,
+    );
+
+    expect(controller.dashboardLayout.name, 'Focused dashboard');
+    expect(
+      controller.dashboardLayout.savedViewWidgets.last.title,
+      'Today',
+    );
+    expect(controller.dashboardLayout.savedViewWidgets.first.id, second.id);
+    expect(persistedLayout?.name, 'Focused dashboard');
+  });
+
   test('ready list mode uses backend next-actions query preset', () {
     final query = TaskQuery.forListMode(
       mode: TaskListMode.ready,
@@ -811,6 +948,8 @@ class _FakeBackendClient implements TaskBackendClient {
   final List<TaskStatus> transitionedStatuses = <TaskStatus>[];
   final List<String> updatedDescriptions = <String>[];
   final List<DateTime?> updatedDueDates = <DateTime?>[];
+  final List<TaskRecurrence?> updatedRecurrences = <TaskRecurrence?>[];
+  final List<bool> clearedRecurrences = <bool>[];
   final List<SavedTaskView> savedViews = <SavedTaskView>[];
   final List<DashboardLayout> dashboardLayouts = <DashboardLayout>[];
   final List<TaskItem> _tasks = <TaskItem>[
@@ -957,6 +1096,7 @@ class _FakeBackendClient implements TaskBackendClient {
       end: input.status == TaskStatus.completed
           ? DateTime.utc(2026, 4, 12)
           : null,
+      recurrence: current.recurrence,
     );
     _tasks[index] = updated;
     return updated;
@@ -983,6 +1123,8 @@ class _FakeBackendClient implements TaskBackendClient {
       entry: current.entry,
       modified: DateTime.utc(2026, 4, 12),
       end: current.end,
+      recurrence:
+          input.clearRecurrence ? null : input.recurrence ?? current.recurrence,
     );
     _tasks[index] = updated;
     if (input.description != null) {
@@ -990,6 +1132,10 @@ class _FakeBackendClient implements TaskBackendClient {
     }
     if (input.due != null || input.clearDue) {
       updatedDueDates.add(input.due);
+    }
+    if (input.recurrence != null || input.clearRecurrence) {
+      updatedRecurrences.add(input.recurrence);
+      clearedRecurrences.add(input.clearRecurrence);
     }
     return updated;
   }
@@ -1016,6 +1162,7 @@ class _FakeBackendClient implements TaskBackendClient {
       entry: current.entry,
       modified: DateTime.utc(2026, 4, 12),
       end: input.lane == BoardLane.completed ? DateTime.utc(2026, 4, 12) : null,
+      recurrence: current.recurrence,
     );
     _tasks[index] = updated;
     return updated;

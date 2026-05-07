@@ -12,7 +12,10 @@ Current scope:
 - saved task views with local persistence, JSON import/export, and backend
   push/pull sharing
 - dashboard layouts with fixed widgets, saved-view-backed panels, local
-  persistence, JSON import/export, and backend push/pull sharing
+  persistence, naming, ordering, JSON import/export, and backend push/pull
+  sharing
+- recurrence controls for existing tasks that submit Taskwarrior-compatible
+  properties without creating recurrence child tasks in Flutter
 - an HTTP backend client used by the application entry point
 - a local development adapter retained for widget tests and local UI work
 

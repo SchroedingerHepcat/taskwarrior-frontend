@@ -159,6 +159,16 @@ class _DashboardSettingsPanel extends StatelessWidget {
       ),
       children: <Widget>[
         const SizedBox(height: 8),
+        TextFormField(
+          key: const Key('dashboard-layout-name-field'),
+          initialValue: controller.dashboardLayout.name,
+          decoration: const InputDecoration(
+            labelText: 'Dashboard layout name',
+          ),
+          textInputAction: TextInputAction.done,
+          onFieldSubmitted: controller.renameDashboardLayout,
+        ),
+        const SizedBox(height: 16),
         Align(
           alignment: Alignment.centerLeft,
           child: Wrap(
@@ -198,19 +208,33 @@ class _DashboardSettingsPanel extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        for (final widget in controller.dashboardLayout.savedViewWidgets)
-          ListTile(
-            key: Key('dashboard-layout-widget-${widget.id}'),
-            contentPadding: EdgeInsets.zero,
-            title: Text(widget.title),
-            subtitle: Text('Saved view: ${widget.viewId}'),
-            trailing: IconButton(
-              tooltip: 'Remove panel',
-              onPressed: () {
-                controller.removeSavedViewFromDashboard(widget.id);
-              },
-              icon: const Icon(Icons.remove_circle_outline),
-            ),
+        for (final entry in controller.dashboardLayout.savedViewWidgets.indexed)
+          _DashboardSavedViewPanelEditor(
+            key: Key('dashboard-layout-widget-${entry.$2.id}'),
+            widget: entry.$2,
+            index: entry.$1,
+            count: controller.dashboardLayout.savedViewWidgets.length,
+            onRename: (title) {
+              controller.renameDashboardSavedViewWidget(
+                widgetId: entry.$2.id,
+                title: title,
+              );
+            },
+            onMoveUp: () {
+              controller.moveDashboardSavedViewWidget(
+                widgetId: entry.$2.id,
+                direction: -1,
+              );
+            },
+            onMoveDown: () {
+              controller.moveDashboardSavedViewWidget(
+                widgetId: entry.$2.id,
+                direction: 1,
+              );
+            },
+            onRemove: () {
+              controller.removeSavedViewFromDashboard(entry.$2.id);
+            },
           ),
         const SizedBox(height: 12),
         Wrap(
@@ -344,6 +368,94 @@ class _SavedViewDropdown extends StatelessWidget {
           );
         }).toList(),
         onChanged: views.isEmpty ? null : onChanged,
+      ),
+    );
+  }
+}
+
+class _DashboardSavedViewPanelEditor extends StatelessWidget {
+  const _DashboardSavedViewPanelEditor({
+    super.key,
+    required this.widget,
+    required this.index,
+    required this.count,
+    required this.onRename,
+    required this.onMoveUp,
+    required this.onMoveDown,
+    required this.onRemove,
+  });
+
+  final DashboardSavedViewWidget widget;
+  final int index;
+  final int count;
+  final ValueChanged<String> onRename;
+  final VoidCallback onMoveUp;
+  final VoidCallback onMoveDown;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 720;
+
+    final titleField = SizedBox(
+      width: compact ? double.infinity : 280,
+      child: TextFormField(
+        key: Key('dashboard-panel-title-field-${widget.id}'),
+        initialValue: widget.title,
+        decoration: const InputDecoration(labelText: 'Panel title'),
+        textInputAction: TextInputAction.done,
+        onFieldSubmitted: onRename,
+      ),
+    );
+    final actions = Wrap(
+      spacing: 4,
+      children: <Widget>[
+        IconButton(
+          key: Key('dashboard-panel-up-${widget.id}'),
+          tooltip: 'Move panel up',
+          onPressed: index == 0 ? null : onMoveUp,
+          icon: const Icon(Icons.arrow_upward_outlined),
+        ),
+        IconButton(
+          key: Key('dashboard-panel-down-${widget.id}'),
+          tooltip: 'Move panel down',
+          onPressed: index == count - 1 ? null : onMoveDown,
+          icon: const Icon(Icons.arrow_downward_outlined),
+        ),
+        IconButton(
+          key: Key('dashboard-panel-remove-${widget.id}'),
+          tooltip: 'Remove panel',
+          onPressed: onRemove,
+          icon: const Icon(Icons.remove_circle_outline),
+        ),
+      ],
+    );
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: compact
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  titleField,
+                  const SizedBox(height: 8),
+                  Text('Saved view: ${widget.viewId}'),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: actions,
+                  ),
+                ],
+              )
+            : Row(
+                children: <Widget>[
+                  Expanded(child: titleField),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text('Saved view: ${widget.viewId}')),
+                  actions,
+                ],
+              ),
       ),
     );
   }

@@ -200,7 +200,7 @@ creation, editing, completion, and querying.
 
 ## Milestone 5: Taskwarrior Semantics, GTD, And Advanced Views
 
-Status: in progress
+Status: complete
 
 ### Goal
 
@@ -250,6 +250,11 @@ board views, and advanced filtering.
   `parent`, `mask`, and `imask`. The application does not locally generate
   future recurrence instances; that remains delegated to Taskwarrior or
   TaskChampion-compatible semantics.
+- Flutter task detail now exposes recurrence controls for typeable
+  Taskwarrior `recur` values, common schedule presets, `rtype`, `until`,
+  `parent`, `mask`, and `imask`. Tests prove those controls submit
+  recurrence properties through the backend client without creating child
+  tasks in Flutter.
 - Scheduled and waiting behavior is represented in the core model, the
   compatibility layer, backend filters, and Flutter task models.
 - GTD support now includes backend-owned saved query presets for inbox, next
@@ -265,8 +270,8 @@ board views, and advanced filtering.
   exported, persisted locally across Flutter app restarts, and selectively
   pushed to or retrieved from the backend for sharing between clients.
 - Dashboard layouts now support fixed widgets plus saved-view-backed panels,
-  local persistence across Flutter app restarts, JSON import/export, and
-  selective backend push/pull sharing.
+  panel naming and ordering, local persistence across Flutter app restarts,
+  JSON import/export, and selective backend push/pull sharing.
 - Backend-shared saved views and dashboard layouts now persist across backend
   restarts through a durable UI state file.
 - Board drag-and-drop now calls a product-facing backend board transition
@@ -276,15 +281,6 @@ board views, and advanced filtering.
   recurrence behavior remain Taskwarrior or TaskChampion responsibilities. This
   app should prove that it can set and modify recurrence options without
   spawning child tasks itself.
-
-### Remaining Work
-
-- Add frontend controls for creating and modifying every Taskwarrior-supported
-  recurrence schedule option on existing tasks.
-- Add tests proving recurrence controls submit Taskwarrior-compatible
-  recurrence properties without spawning child tasks in the client.
-- Refine dashboard layout editing with ordering, naming, and platform-specific
-  presentation polish.
 
 ## Milestone 6: Self-Hosted Deployment
 

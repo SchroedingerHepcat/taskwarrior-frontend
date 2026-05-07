@@ -372,6 +372,18 @@ class DashboardSavedViewWidget {
   final String viewId;
   final TaskListFilter filter;
 
+  DashboardSavedViewWidget copyWith({
+    String? title,
+    TaskListFilter? filter,
+  }) {
+    return DashboardSavedViewWidget(
+      id: id,
+      title: title ?? this.title,
+      viewId: viewId,
+      filter: filter ?? this.filter,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'id': id,
@@ -828,6 +840,8 @@ class UpdateTaskInput {
     this.clearScheduled = false,
     this.waitUntil,
     this.clearWait = false,
+    this.recurrence,
+    this.clearRecurrence = false,
     this.addAnnotation,
   });
 
@@ -841,6 +855,8 @@ class UpdateTaskInput {
   final bool clearScheduled;
   final DateTime? waitUntil;
   final bool clearWait;
+  final TaskRecurrence? recurrence;
+  final bool clearRecurrence;
   final String? addAnnotation;
 }
 
@@ -876,6 +892,7 @@ class TaskItem {
     this.scheduled,
     this.waitUntil,
     this.end,
+    this.recurrence,
   });
 
   final String id;
@@ -890,6 +907,7 @@ class TaskItem {
   final DateTime? scheduled;
   final DateTime? waitUntil;
   final DateTime? end;
+  final TaskRecurrence? recurrence;
 
   String get summary {
     if (annotations.isNotEmpty) {
@@ -934,6 +952,46 @@ class TaskItem {
     }
 
     return '${date.month}/${date.day}/${date.year}';
+  }
+}
+
+class TaskRecurrence {
+  const TaskRecurrence({
+    required this.recur,
+    this.rtype,
+    this.until,
+    this.parent,
+    this.mask,
+    this.imask,
+  });
+
+  final String recur;
+  final String? rtype;
+  final DateTime? until;
+  final String? parent;
+  final String? mask;
+  final String? imask;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'recur': recur,
+      'rtype': rtype,
+      'until': _dateToJson(until),
+      'parent': parent,
+      'mask': mask,
+      'imask': imask,
+    };
+  }
+
+  factory TaskRecurrence.fromJson(Map<String, dynamic> json) {
+    return TaskRecurrence(
+      recur: json['recur'] as String,
+      rtype: json['rtype'] as String?,
+      until: _dateFromJson(json['until']),
+      parent: json['parent'] as String?,
+      mask: json['mask'] as String?,
+      imask: json['imask'] as String?,
+    );
   }
 }
 

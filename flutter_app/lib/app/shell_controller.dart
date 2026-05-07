@@ -388,6 +388,72 @@ class ShellController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> renameDashboardLayout(String name) async {
+    final normalized = name.trim();
+    if (normalized.isEmpty) {
+      _errorMessage = 'Dashboard layout name is required.';
+      notifyListeners();
+      return;
+    }
+
+    _dashboardLayout = _dashboardLayout.copyWith(
+      name: normalized,
+      updatedAt: _clock().toUtc(),
+    );
+    await _persistDashboardLayout();
+    notifyListeners();
+  }
+
+  Future<void> renameDashboardSavedViewWidget({
+    required String widgetId,
+    required String title,
+  }) async {
+    final normalized = title.trim();
+    if (normalized.isEmpty) {
+      _errorMessage = 'Dashboard panel title is required.';
+      notifyListeners();
+      return;
+    }
+
+    _dashboardLayout = _dashboardLayout.copyWith(
+      savedViewWidgets: _dashboardLayout.savedViewWidgets.map((widget) {
+        if (widget.id != widgetId) {
+          return widget;
+        }
+
+        return widget.copyWith(title: normalized);
+      }).toList(),
+      updatedAt: _clock().toUtc(),
+    );
+    await _persistDashboardLayout();
+    await _refreshDashboardWidgets();
+    notifyListeners();
+  }
+
+  Future<void> moveDashboardSavedViewWidget({
+    required String widgetId,
+    required int direction,
+  }) async {
+    final widgets = List<DashboardSavedViewWidget>.from(
+      _dashboardLayout.savedViewWidgets,
+    );
+    final index = widgets.indexWhere((widget) => widget.id == widgetId);
+    final nextIndex = index + direction;
+    if (index == -1 || nextIndex < 0 || nextIndex >= widgets.length) {
+      return;
+    }
+
+    final widget = widgets.removeAt(index);
+    widgets.insert(nextIndex, widget);
+    _dashboardLayout = _dashboardLayout.copyWith(
+      savedViewWidgets: widgets,
+      updatedAt: _clock().toUtc(),
+    );
+    await _persistDashboardLayout();
+    await _refreshDashboardWidgets();
+    notifyListeners();
+  }
+
   Future<void> removeSavedViewFromDashboard(String widgetId) async {
     _dashboardLayout = _dashboardLayout.copyWith(
       savedViewWidgets: _dashboardLayout.savedViewWidgets

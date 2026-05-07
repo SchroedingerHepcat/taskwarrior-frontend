@@ -50,17 +50,18 @@ Saved views can be persisted locally, imported and exported as JSON, and
 selectively shared through the Rust backend as product-facing query
 definitions.
 Dashboard layouts can use fixed widgets and saved-view-backed panels. The
-active layout is persisted locally, can be imported or exported as JSON, and
-can be selectively shared through the Rust backend as presentation/query
-configuration. Backend sharing for saved views and dashboard layouts persists
-across backend restarts through a JSON UI state file. The server binary uses
+active layout supports naming and saved-view panel ordering, is persisted
+locally, can be imported or exported as JSON, and can be selectively shared
+through the Rust backend as presentation/query configuration. Backend sharing
+for saved views and dashboard layouts persists across backend restarts through
+a JSON UI state file. The server binary uses
 `taskwarrior-frontend-ui-state.json` by default; set `--ui-state-path` or
 `TASKWARRIOR_FRONTEND_UI_STATE_PATH` to choose another location.
 Recurrence properties are preserved through the Taskwarrior-compatible model;
-recurrence instance generation remains delegated to Taskwarrior or
-TaskChampion-compatible semantics. The app should provide controls to view
-recurring tasks and edit Taskwarrior-supported recurrence options, but it
-should not spawn recurrence child tasks itself.
+the Flutter detail screen can edit Taskwarrior-compatible recurrence settings
+for existing tasks. Recurrence instance generation remains delegated to
+Taskwarrior or TaskChampion-compatible semantics, and the app does not spawn
+recurrence child tasks itself.
 
 The Flutter app stores the configured backend API URL locally. If no backend
 URL is provided at build time and no saved URL exists, the app starts on

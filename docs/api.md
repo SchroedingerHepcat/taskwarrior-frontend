@@ -92,6 +92,8 @@ widgets, update timestamp, and product-facing query filters copied from saved
 views. Flutter persists the active layout locally and may selectively push or
 pull layouts through `/dashboard-layouts`. These endpoints store layout
 definitions only; dashboard task data is still loaded through `/tasks/query`.
+Flutter can rename the active dashboard layout, rename saved-view-backed
+panels, and reorder those panels before persisting or sharing the layout.
 The backend persists shared saved views and dashboard layouts to a JSON UI
 state file when configured with durable UI state. The server binary uses
 `taskwarrior-frontend-ui-state.json` by default, and the path can be changed
@@ -116,8 +118,9 @@ The current update shape is still intentionally narrow:
 Recurrence update currently preserves Taskwarrior-compatible recurrence
 properties. It does not expose a separate recurrence instance generator, and
 clients must not create future recurrence task instances themselves. The
-intended API behavior is to submit supported Taskwarrior recurrence settings
-to the backend and let Taskwarrior or TaskChampion handle recurrence
+current Flutter client exposes typeable `recur` input plus controls for
+`rtype`, `until`, `parent`, `mask`, and `imask`, then submits those properties
+to the backend. Taskwarrior or TaskChampion remains responsible for recurrence
 execution.
 
 The server still has an internal product-facing dependency operation, but that

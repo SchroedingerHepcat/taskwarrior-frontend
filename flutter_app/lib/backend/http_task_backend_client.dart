@@ -139,6 +139,8 @@ class HttpTaskBackendClient implements TaskBackendClient {
         'clear_scheduled': input.clearScheduled,
         'wait': input.waitUntil?.toUtc().toIso8601String(),
         'clear_wait': input.clearWait,
+        'recurrence': input.recurrence?.toJson(),
+        'clear_recurrence': input.clearRecurrence,
         'add_annotation': input.addAnnotation,
       }),
     );
@@ -240,7 +242,16 @@ class HttpTaskBackendClient implements TaskBackendClient {
       scheduled: _dateTimeOrNull(json['scheduled']),
       waitUntil: _dateTimeOrNull(json['wait']),
       end: _dateTimeOrNull(json['end']),
+      recurrence: _recurrenceOrNull(json['recurrence']),
     );
+  }
+
+  TaskRecurrence? _recurrenceOrNull(Object? raw) {
+    if (raw == null) {
+      return null;
+    }
+
+    return TaskRecurrence.fromJson(raw as Map<String, dynamic>);
   }
 
   DateTime? _dateTimeOrNull(Object? raw) {
