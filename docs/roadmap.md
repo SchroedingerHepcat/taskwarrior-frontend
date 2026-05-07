@@ -21,7 +21,7 @@
 
 ## Milestone 1: Compatibility Spike
 
-Status: complete
+Status: in progress
 
 ### Goal
 
@@ -258,6 +258,20 @@ board views, and advanced filtering.
 - Deeper recurrence instance generation, conflict behavior, and multi-replica
   recurrence behavior remain future proof items because they depend on
   Taskwarrior or TaskChampion execution semantics rather than UI filtering.
+
+### Remaining Work
+
+- Add a user-facing advanced filtering UI rather than only fixed presets and
+  backend query fields.
+- Add customizable task lists or saved views that can be created, edited,
+  selected, and deleted from the Flutter client.
+- Persist saved list/view configuration across app restarts.
+- Let dashboard configuration use saved views instead of only the current
+  fixed widget set.
+- Add tests proving saved views produce the expected backend query shape and
+  survive restart.
+- Clarify which recurrence behaviors are delegated to Taskwarrior or
+  TaskChampion versus represented directly in this app.
 
 ## Milestone 6: Self-Hosted Deployment
 

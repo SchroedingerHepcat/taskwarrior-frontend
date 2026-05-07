@@ -144,6 +144,127 @@ void main() {
     expect(find.byKey(const Key('backend-url-field')), findsOneWidget);
   });
 
+  testWidgets('task detail auto-saves edits and supports undo', (tester) async {
+    final backend = _FakeBackendClient();
+
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: backend,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(ShellSection.detail.icon));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('detail-description-field')),
+      'Task shell updated',
+    );
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pumpAndSettle();
+
+    expect(backend.updatedDescriptions, contains('Task shell updated'));
+    expect(find.byKey(const Key('detail-save-button')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('detail-undo-button')));
+    await tester.pumpAndSettle();
+
+    expect(backend.updatedDescriptions, contains('Task shell'));
+  });
+
+  testWidgets('task detail autosave keeps editor visible', (tester) async {
+    final backend = _FakeBackendClient();
+
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: backend,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(ShellSection.detail.icon));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('detail-description-field')),
+      'Task shell still focused',
+    );
+    await tester.pump(const Duration(milliseconds: 700));
+
+    expect(find.byKey(const Key('detail-description-field')), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
+
+  testWidgets('task detail waits for complete date before autosave',
+      (tester) async {
+    final backend = _FakeBackendClient();
+
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: backend,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(ShellSection.detail.icon));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('detail-due-field')),
+      '2026-',
+    );
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pumpAndSettle();
+
+    expect(backend.updatedDueDates, isEmpty);
+    expect(find.textContaining('Backend request failed'), findsNothing);
+  });
+
+  testWidgets('task detail accepts flexible date input', (tester) async {
+    final backend = _FakeBackendClient();
+
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: backend,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(ShellSection.detail.icon));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('detail-due-field')),
+      '2026-5-8',
+    );
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.updatedDueDates,
+      contains(DateTime.utc(2026, 5, 8)),
+    );
+  });
+
+  testWidgets('date picker opens only from calendar button', (tester) async {
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: _FakeBackendClient(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(ShellSection.detail.icon));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('detail-due-field')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DatePickerDialog), findsNothing);
+    expect(find.byKey(const Key('detail-due-picker-button')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('detail-due-picker-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DatePickerDialog), findsOneWidget);
+  });
+
   test('ready list mode uses backend next-actions query preset', () {
     final query = TaskQuery.forListMode(
       mode: TaskListMode.ready,
@@ -211,6 +332,8 @@ class _FakeBackendClient implements TaskBackendClient {
   final String label;
   int healthChecks = 0;
   int queryCalls = 0;
+  final List<String> updatedDescriptions = <String>[];
+  final List<DateTime?> updatedDueDates = <DateTime?>[];
   final List<TaskItem> _tasks = <TaskItem>[
     TaskItem(
       id: 'task-1',
@@ -322,6 +445,12 @@ class _FakeBackendClient implements TaskBackendClient {
       end: current.end,
     );
     _tasks[index] = updated;
+    if (input.description != null) {
+      updatedDescriptions.add(input.description!);
+    }
+    if (input.due != null || input.clearDue) {
+      updatedDueDates.add(input.due);
+    }
     return updated;
   }
 

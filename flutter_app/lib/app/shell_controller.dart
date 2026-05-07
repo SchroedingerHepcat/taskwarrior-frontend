@@ -99,7 +99,7 @@ class ShellController extends ChangeNotifier {
         CreateTaskInput(description: description.trim()),
       );
       _selectedTaskId = task.id;
-      await _refresh();
+      await _refresh(showLoading: false);
     });
   }
 
@@ -118,7 +118,7 @@ class ShellController extends ChangeNotifier {
 
       final updated = await backend.updateTask(task.id, input);
       _selectedTaskId = updated.id;
-      await _refresh();
+      await _refresh(showLoading: false);
     });
   }
 
@@ -140,7 +140,7 @@ class ShellController extends ChangeNotifier {
         TaskTransitionInput(status: status),
       );
       _selectedTaskId = updated.id;
-      await _refresh();
+      await _refresh(showLoading: false);
     });
   }
 
@@ -210,11 +210,13 @@ class ShellController extends ChangeNotifier {
       );
       _selectedTaskId = updated.id;
       _boardIntent = 'Moved "${task.title}" to ${lane.title}.';
-      await _refresh();
+      await _refresh(showLoading: false);
     });
   }
 
-  Future<void> _refresh() async {
+  Future<void> _refresh({
+    bool showLoading = true,
+  }) async {
     final backend = _backend;
     if (backend == null) {
       _isLoading = false;
@@ -223,7 +225,9 @@ class ShellController extends ChangeNotifier {
       return;
     }
 
-    _isLoading = true;
+    if (showLoading) {
+      _isLoading = true;
+    }
     _errorMessage = null;
     notifyListeners();
 
@@ -234,7 +238,9 @@ class ShellController extends ChangeNotifier {
     } catch (error) {
       _errorMessage = _humanReadableError(error);
     } finally {
-      _isLoading = false;
+      if (showLoading) {
+        _isLoading = false;
+      }
       notifyListeners();
     }
   }
