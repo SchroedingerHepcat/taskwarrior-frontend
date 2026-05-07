@@ -67,6 +67,7 @@ class DashboardScreen extends StatelessWidget {
                 final widgetData = controller.widgetDataFor(widgetType);
 
                 return _DashboardWidgetCard(
+                  controller: controller,
                   data: widgetData,
                   onOpenTask: onOpenTask,
                 );
@@ -79,18 +80,33 @@ class DashboardScreen extends StatelessWidget {
   }
 }
 
-class _DashboardWidgetCard extends StatelessWidget {
+class _DashboardWidgetCard extends StatefulWidget {
   const _DashboardWidgetCard({
+    required this.controller,
     required this.data,
     required this.onOpenTask,
   });
 
+  final ShellController controller;
   final DashboardWidgetData? data;
   final ValueChanged<String> onOpenTask;
 
   @override
+  State<_DashboardWidgetCard> createState() => _DashboardWidgetCardState();
+}
+
+class _DashboardWidgetCardState extends State<_DashboardWidgetCard> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final widgetData = data;
+    final widgetData = widget.data;
 
     return Card(
       child: Padding(
@@ -105,19 +121,48 @@ class _DashboardWidgetCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text('${widgetData?.tasks.length ?? 0} tasks'),
             const SizedBox(height: 16),
-            if (widgetData == null || widgetData.tasks.isEmpty)
-              const Text('No tasks matched this server query.')
-            else
-              for (final task in widgetData.tasks.take(3))
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(task.title),
-                  subtitle: Text(task.project ?? 'No project'),
-                  onTap: () => onOpenTask(task.id),
+            Expanded(
+              child: Scrollbar(
+                controller: _scrollController,
+                child: SingleChildScrollView(
+                  controller: _scrollController,
+                  child: widgetData == null || widgetData.tasks.isEmpty
+                      ? const Text('No tasks matched this server query.')
+                      : Column(
+                          children: <Widget>[
+                            for (final task in widgetData.tasks.take(3))
+                              ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: Checkbox(
+                                  key: Key(
+                                    'dashboard-complete-'
+                                    '${widgetData.widget.name}-${task.id}',
+                                  ),
+                                  value: task.status == TaskStatus.completed,
+                                  onChanged: widget.controller.isSaving
+                                      ? null
+                                      : (_) => _setCompleted(task),
+                                ),
+                                title: Text(task.title),
+                                subtitle: Text(task.project ?? 'No project'),
+                                onTap: () => widget.onOpenTask(task.id),
+                              ),
+                          ],
+                        ),
                 ),
+              ),
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _setCompleted(TaskItem task) async {
+    final completed = task.status == TaskStatus.completed;
+    await widget.controller.transitionTask(
+      task,
+      completed ? TaskStatus.pending : TaskStatus.completed,
     );
   }
 }

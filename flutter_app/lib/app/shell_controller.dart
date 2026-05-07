@@ -128,6 +128,13 @@ class ShellController extends ChangeNotifier {
       return;
     }
 
+    await transitionTask(task, status);
+  }
+
+  Future<void> transitionTask(
+    TaskItem task,
+    TaskStatus status,
+  ) async {
     await _runMutation(() async {
       final backend = _backend;
       if (backend == null) {

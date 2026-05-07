@@ -97,6 +97,189 @@ void main() {
     expect(field.controller?.text, isEmpty);
   });
 
+  testWidgets('task list groups active and completed tasks', (tester) async {
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: _FakeBackendClient(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(ShellSection.tasks.icon));
+    await tester.pumpAndSettle();
+
+    expect(find.text('To do'), findsOneWidget);
+    expect(find.text('Completed'), findsOneWidget);
+    expect(find.byKey(const Key('task-complete-task-1')), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('task-complete-task-3')),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+
+    expect(find.byKey(const Key('task-complete-task-3')), findsOneWidget);
+  });
+
+  testWidgets('task list rows are compact until expanded', (tester) async {
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: _FakeBackendClient(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(ShellSection.tasks.icon));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Loaded through the backend client boundary.'),
+      findsNothing,
+    );
+
+    await tester.tap(find.byKey(const Key('task-expand-task-1')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Loaded through the backend client boundary.'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('task-open-task-1')), findsOneWidget);
+  });
+
+  testWidgets('task list prioritizes due date metadata', (tester) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: _FakeBackendClient(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(ShellSection.tasks.icon));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('task-row-due-task-1')), findsOneWidget);
+    expect(find.byKey(const Key('task-row-project-task-1')), findsOneWidget);
+    expect(find.byKey(const Key('task-row-tags-task-1')), findsOneWidget);
+    expect(find.byKey(const Key('task-row-due-task-4')), findsOneWidget);
+    expect(find.byKey(const Key('task-row-project-task-4')), findsOneWidget);
+    expect(find.byKey(const Key('task-row-tags-task-4')), findsOneWidget);
+    expect(find.byKey(const Key('task-tag-badge-task-4')), findsNothing);
+    expect(find.byKey(const Key('task-project-badge-task-4')), findsNothing);
+
+    final flutterProjectDecoration = tester
+        .widget<Container>(
+          find.descendant(
+            of: find.byKey(const Key('task-project-badge-task-1')),
+            matching: find.byType(Container),
+          ),
+        )
+        .decoration as BoxDecoration;
+    final planningProjectDecoration = tester
+        .widget<Container>(
+          find.descendant(
+            of: find.byKey(const Key('task-project-badge-task-2')),
+            matching: find.byType(Container),
+          ),
+        )
+        .decoration as BoxDecoration;
+    final frontendTagDecoration = tester
+        .widget<Container>(
+          find.byKey(const Key('task-tag-badge-task-1-frontend')),
+        )
+        .decoration as BoxDecoration;
+    final dashboardTagDecoration = tester
+        .widget<Container>(
+          find.byKey(const Key('task-tag-badge-task-2-dashboard')),
+        )
+        .decoration as BoxDecoration;
+
+    expect(flutterProjectDecoration.color, isNotNull);
+    expect(frontendTagDecoration.color, isNotNull);
+    expect(
+      flutterProjectDecoration.color,
+      isNot(planningProjectDecoration.color),
+    );
+    expect(
+      frontendTagDecoration.color,
+      isNot(dashboardTagDecoration.color),
+    );
+  });
+
+  testWidgets('task list checkbox transitions completion', (tester) async {
+    final backend = _FakeBackendClient();
+
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: backend,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(ShellSection.tasks.icon));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('task-complete-task-1')));
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.transitionedStatuses,
+      contains(TaskStatus.completed),
+    );
+  });
+
+  testWidgets('dashboard task checkbox transitions completion', (tester) async {
+    final backend = _FakeBackendClient();
+
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: backend,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const Key('dashboard-complete-readyNow-task-1')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.transitionedStatuses,
+      contains(TaskStatus.completed),
+    );
+  });
+
+  testWidgets('dashboard cards scroll instead of overflowing', (tester) async {
+    tester.view.physicalSize = const Size(900, 520);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: _FakeBackendClient(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('dashboard-screen')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.ensureVisible(find.byType(SingleChildScrollView).first);
+    await tester.drag(
+      find.byType(SingleChildScrollView).first,
+      Offset.zero,
+      warnIfMissed: false,
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('settings can replace the backend server URL', (tester) async {
     final initial = _FakeBackendClient(label: 'Initial backend');
     final replacement = _FakeBackendClient(label: 'Replacement backend');
@@ -363,6 +546,7 @@ class _FakeBackendClient implements TaskBackendClient {
   int healthChecks = 0;
   int queryCalls = 0;
   final List<String> createdDescriptions = <String>[];
+  final List<TaskStatus> transitionedStatuses = <TaskStatus>[];
   final List<String> updatedDescriptions = <String>[];
   final List<DateTime?> updatedDueDates = <DateTime?>[];
   final List<TaskItem> _tasks = <TaskItem>[
@@ -386,6 +570,22 @@ class _FakeBackendClient implements TaskBackendClient {
       project: 'Planning',
       status: TaskStatus.recurring,
       tags: <String>['dashboard'],
+      annotations: <TaskAnnotation>[],
+    ),
+    const TaskItem(
+      id: 'task-4',
+      title: 'No metadata task',
+      project: null,
+      status: TaskStatus.pending,
+      tags: <String>[],
+      annotations: <TaskAnnotation>[],
+    ),
+    const TaskItem(
+      id: 'task-3',
+      title: 'Completed task',
+      project: 'Archive',
+      status: TaskStatus.completed,
+      tags: <String>['done'],
       annotations: <TaskAnnotation>[],
     ),
   ];
@@ -432,6 +632,7 @@ class _FakeBackendClient implements TaskBackendClient {
     String taskId,
     TaskTransitionInput input,
   ) async {
+    transitionedStatuses.add(input.status);
     final index = _tasks.indexWhere((task) => task.id == taskId);
     final current = _tasks[index];
     final updated = TaskItem(
