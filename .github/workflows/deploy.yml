@@ -8,7 +8,7 @@ jobs:
   compose-config:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Validate Docker Compose config
         run: docker compose -f deploy/docker-compose.yaml config
       - name: Build Docker Compose images
