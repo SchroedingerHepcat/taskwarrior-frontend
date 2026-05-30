@@ -22,6 +22,12 @@ Current scope:
   TaskChampion task-sync state and expose retry when available
 - a local development adapter retained for widget tests and local UI work
 
+UI validation includes widget tests, a Linux HTTP integration test, and a
+shared shell parity integration test intended to run on Linux, Chrome,
+Firefox, and Android emulator targets. The parity test checks core navigation,
+task creation, visible text, sync status presentation, and wide-layout column
+separation without depending on TaskChampion storage.
+
 This package keeps backend access behind a client boundary so screen logic
 does not depend on transport or storage details. The default app entry point
 targets the Rust HTTP server. Taskwarrior and TaskChampion semantics still stay
