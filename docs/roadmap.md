@@ -126,9 +126,9 @@ task semantics in Rust and leaving room for future sync and integration work.
 - Task CRUD routes through TaskChampion-backed storage rather than an
   independent authoritative task database, and the API does not expose raw
   TaskChampion storage, replica objects, or Taskwarrior data files.
-- Authentication, pagination, public sync status controls, dependency mutation
-  on the public HTTP surface, and conflict behavior are future API hardening
-  work. They are not blockers for the scaffold milestone.
+- Authentication, pagination, dependency mutation on the public HTTP surface,
+  and conflict behavior are future API hardening work. They are not blockers
+  for the scaffold milestone.
 
 ## Milestone 3: Flutter Shell
 
@@ -383,7 +383,8 @@ deployment and basic operational controls.
   a separately hosted TaskChampion sync server.
 - Migration hardening for future durable storage format changes remains open.
 - A real external TaskChampion sync-server proof now exists for Milestone 7.
-- User-facing sync status and retry controls remain part of Milestone 7.
+- User-facing sync conflict and offline recovery behavior remain part of
+  Milestone 7.
 
 ## Milestone 7: Sync, Error, And Conflict UX
 
@@ -395,6 +396,7 @@ clients, especially once multiple devices are in use.
 ### Deliverables
 
 - Sync state model and user-visible status indicators.
+- Product-safe backend sync status and retry endpoints.
 - Backend synchronization with an external TaskChampion sync server.
 - Error handling for network failures, invalid updates, and server rejections.
 - Conflict detection and conflict resolution UX.
@@ -425,13 +427,21 @@ clients, especially once multiple devices are in use.
   TaskChampion sync proof between two backend replicas.
 - HTTP task writes now sync after local TaskChampion mutation, and HTTP task
   reads sync before serving product queries when sync is configured.
+- The backend exposes product-safe sync state through `GET /sync/status` and
+  retry through `POST /sync/retry`. The public shape reports disabled,
+  configured, syncing, succeeded, or failed state, last attempt time, a short
+  error summary, and whether retry is available. It does not expose sync
+  credentials, server URLs, replica identifiers, storage paths, or raw
+  TaskChampion errors.
+- The Flutter shell now separates backend API connectivity from TaskChampion
+  task-sync state with a compact status control and retry action.
 - Compatibility with a separately hosted TaskChampion sync server is covered
   by an ignored integration proof that starts
   `ghcr.io/gothenburgbitfactory/taskchampion-sync-server`, syncs two backend
   replicas, and verifies Taskwarrior CLI interoperability.
 - Offline write reconciliation remains open.
-- A durable error model from the API boundary will likely need to solidify here
-  if it has not already been finalized earlier.
+- Conflict detection, conflict resolution UX, and offline reconnection policy
+  remain open.
 
 ## Milestone 8: Polish For Android, Web, And Desktop
 

@@ -30,6 +30,22 @@ class HttpTaskBackendClient implements TaskBackendClient {
   }
 
   @override
+  Future<BackendSyncStatus> syncStatus() async {
+    final response = await _client.get(_uri('/sync/status'));
+    _ensureSuccess(response);
+
+    return _decodeSyncStatus(response.body);
+  }
+
+  @override
+  Future<BackendSyncStatus> retrySync() async {
+    final response = await _client.post(_uri('/sync/retry'));
+    _ensureSuccess(response);
+
+    return _decodeSyncStatus(response.body);
+  }
+
+  @override
   Future<TaskItem> createTask(CreateTaskInput input) async {
     final response = await _client.post(
       _uri('/tasks'),
@@ -218,6 +234,17 @@ class HttpTaskBackendClient implements TaskBackendClient {
     final task = decoded['task'] as Map<String, dynamic>;
 
     return _decodeTask(task);
+  }
+
+  BackendSyncStatus _decodeSyncStatus(String body) {
+    final decoded = jsonDecode(body) as Map<String, dynamic>;
+
+    return BackendSyncStatus(
+      state: BackendSyncState.fromApi(decoded['state'] as String),
+      lastAttemptAt: _dateTimeOrNull(decoded['last_attempt_at']),
+      errorSummary: decoded['error_summary'] as String?,
+      retryAvailable: decoded['retry_available'] as bool? ?? false,
+    );
   }
 
   TaskItem _decodeTask(Map<String, dynamic> json) {

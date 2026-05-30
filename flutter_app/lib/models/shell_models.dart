@@ -504,6 +504,57 @@ class BackendHealth {
   final String environment;
 }
 
+enum BackendSyncState {
+  disabled,
+  configured,
+  syncing,
+  succeeded,
+  failed;
+
+  static BackendSyncState fromApi(String raw) {
+    return BackendSyncState.values.firstWhere(
+      (state) => state.name == raw,
+      orElse: () => BackendSyncState.failed,
+    );
+  }
+}
+
+class BackendSyncStatus {
+  const BackendSyncStatus({
+    required this.state,
+    required this.retryAvailable,
+    this.lastAttemptAt,
+    this.errorSummary,
+  });
+
+  const BackendSyncStatus.disabled()
+      : state = BackendSyncState.disabled,
+        retryAvailable = false,
+        lastAttemptAt = null,
+        errorSummary = null;
+
+  const BackendSyncStatus.configured()
+      : state = BackendSyncState.configured,
+        retryAvailable = true,
+        lastAttemptAt = null,
+        errorSummary = null;
+
+  final BackendSyncState state;
+  final DateTime? lastAttemptAt;
+  final String? errorSummary;
+  final bool retryAvailable;
+
+  String get label {
+    return switch (state) {
+      BackendSyncState.disabled => 'Sync disabled',
+      BackendSyncState.configured => 'Sync configured',
+      BackendSyncState.syncing => 'Syncing tasks',
+      BackendSyncState.succeeded => 'Tasks synced',
+      BackendSyncState.failed => 'Task sync failed',
+    };
+  }
+}
+
 class TaskAnnotation {
   const TaskAnnotation({
     required this.entry,

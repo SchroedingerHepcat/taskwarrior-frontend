@@ -234,7 +234,9 @@ The intended layer responsibilities are:
   It should also own configuration for connecting its TaskChampion replica to
   an external TaskChampion sync server. Backend configuration may come from a
   file, environment variables, or CLI flags, but those settings remain server
-  setup concerns rather than Flutter API fields.
+  setup concerns rather than Flutter API fields. Public sync endpoints may
+  expose product-safe state and retry actions, but not credentials, server
+  URLs, replica identifiers, storage paths, or raw TaskChampion errors.
 - `flutter_app`
   Owns presentation and user interaction only. It must not implement
   Taskwarrior semantics itself.
@@ -281,6 +283,9 @@ The intended layer responsibilities are:
   Taskwarrior-compatible recurrence properties. Typeable `recur` input remains
   the complete schedule-option escape hatch; the app must not invent a
   separate recurrence engine.
+- Sync status is a product-facing operational signal. It may distinguish
+  backend connectivity from task-sync state, but it must not expose
+  TaskChampion internals or sync-server credentials to Flutter.
 
 ## What Still Needs Proof
 
@@ -362,6 +367,10 @@ code and tests in this repository:
   sync
 - HTTP task writes syncing to a TaskChampion server and HTTP task reads
   pulling from that server before serving product-facing queries
+- product-safe HTTP sync status and retry endpoints with disabled,
+  configured, syncing, succeeded, and failed states
+- frontend sync status presentation that separates backend connectivity from
+  TaskChampion task-sync state and offers retry when the backend allows it
 - a Flutter shell boundary that routes user navigation and screen state through
   product-facing client operations rather than Taskwarrior storage concepts
 - full end-to-end create, update, complete, and query flows from Flutter to the
@@ -392,7 +401,7 @@ The following areas are still open and should not be treated as proven yet:
   unresolved-dependency filtering
 - production deployment of durable TaskChampion storage, including migration,
   backup, and operational checks
-- sync conflict behavior, retry behavior, and user-facing sync state
+- sync conflict behavior and offline reconciliation
 - whether additional protocols are needed beyond the current HTTP boundary
 - task completion and deletion side effects beyond basic `end` timestamping
   and dependency unblocking in query presets

@@ -11,9 +11,10 @@ This repository currently contains the initial scaffold for:
 
 The Rust server currently includes a small HTTP API with validated
 product-facing operations for health, create, get, update, status transition,
-and query filtering. Server CRUD now routes through TaskChampion-backed
-storage rather than a separate custom task database. It does not yet implement
-authentication, user-facing sync controls, or conflict handling.
+query filtering, and product-safe sync status. Server CRUD now routes through
+TaskChampion-backed storage rather than a separate custom task database. It
+does not yet implement authentication, conflict handling, or offline
+reconciliation.
 
 The Rust backend has internal configuration for in-memory TaskChampion storage
 used by tests and SQLite-backed TaskChampion storage for durable deployment
@@ -79,6 +80,11 @@ the Flutter detail screen can edit Taskwarrior-compatible recurrence settings
 for existing tasks. Recurrence instance generation remains delegated to
 Taskwarrior or TaskChampion-compatible semantics, and the app does not spawn
 recurrence child tasks itself.
+The Flutter shell separates backend API connectivity from TaskChampion task
+sync state. It shows a compact sync status control for disabled, configured,
+syncing, succeeded, and failed states, and exposes retry when the backend
+allows it. Sync-server credentials and TaskChampion replica details remain
+backend-internal configuration.
 
 The Flutter app stores the configured backend API URL locally. If no saved URL
 exists, the app starts on Settings and asks for the Rust backend API URL before

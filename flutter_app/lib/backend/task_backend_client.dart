@@ -3,6 +3,10 @@ import '../models/shell_models.dart';
 abstract interface class TaskBackendClient {
   Future<BackendHealth> healthcheck();
 
+  Future<BackendSyncStatus> syncStatus();
+
+  Future<BackendSyncStatus> retrySync();
+
   Future<List<TaskItem>> queryTasks(TaskQuery query);
 
   Future<TaskItem> getTask(String taskId);

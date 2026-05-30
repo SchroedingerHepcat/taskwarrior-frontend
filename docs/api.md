@@ -33,6 +33,8 @@ The current HTTP surface covers:
 - `POST /tasks/{id}/transition`
 - `POST /tasks/{id}/board-transition`
 - `POST /tasks/query`
+- `GET /sync/status`
+- `POST /sync/retry`
 - `GET /views`
 - `PUT /views/{id}`
 - `DELETE /views/{id}`
@@ -56,6 +58,7 @@ The current product-facing operations cover:
 - dashboard layouts backed by fixed query widgets and saved task views
 - local dashboard layout persistence, import/export, and optional backend
   sharing
+- product-safe sync state and retry for the backend TaskChampion replica
 
 The current query shape uses product-level fields rather than raw
 TaskChampion objects or file-oriented Taskwarrior concepts:
@@ -135,6 +138,42 @@ defaults. The TOML file groups operator settings under `[ui]`,
 `[taskchampion.storage]`, and `[taskchampion.sync]`. Backend bind address is
 also operator configuration through `--host`, `TASKWARRIOR_FRONTEND_HOST`, or
 the top-level TOML `host` field.
+
+## Sync State Boundary
+
+The public sync status API is product-facing status only. It must not include
+TaskChampion replica identifiers, sync-server credentials, encryption secrets,
+server URLs, storage paths, or raw TaskChampion error payloads.
+
+`GET /sync/status` returns the current backend task-sync state:
+
+```json
+{
+  "state": "succeeded",
+  "last_attempt_at": "2026-05-30T12:00:00Z",
+  "error_summary": null,
+  "retry_available": true
+}
+```
+
+`state` is one of:
+
+- `disabled`: backend task sync is not configured.
+- `configured`: sync is configured, but no attempt has completed yet.
+- `syncing`: a sync attempt is currently running.
+- `succeeded`: the last sync attempt completed successfully.
+- `failed`: the last sync attempt failed.
+
+`last_attempt_at` is the UTC timestamp of the most recent completed attempt,
+or `null` before any attempt completes. `error_summary` is a short
+human-readable explanation for `failed` only. `retry_available` is true when
+the backend has sync configured and the client may request another sync
+attempt.
+
+`POST /sync/retry` requests an immediate backend sync attempt and returns the
+same response shape. A reachable backend with a failed TaskChampion sync should
+return `200 OK` with `state: "failed"` and a product-safe `error_summary`.
+Transport errors still mean the frontend could not reach this Rust backend.
 
 ## Current Internal Service Boundaries
 

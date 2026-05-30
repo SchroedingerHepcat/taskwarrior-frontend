@@ -34,6 +34,102 @@ use uuid::Uuid;
 type AppService =
     TaskService<TaskChampionTaskRepository, InMemorySyncCoordinator>;
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct SyncStatusResponse {
+    pub state: String,
+    pub last_attempt_at: Option<DateTime<Utc>>,
+    pub error_summary: Option<String>,
+    pub retry_available: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct HttpSyncState {
+    state: SyncStatusKind,
+    last_attempt_at: Option<DateTime<Utc>>,
+    error_summary: Option<String>,
+    retry_available: bool,
+}
+
+impl HttpSyncState {
+    fn disabled() -> Self {
+        Self {
+            state: SyncStatusKind::Disabled,
+            last_attempt_at: None,
+            error_summary: None,
+            retry_available: false,
+        }
+    }
+
+    fn configured() -> Self {
+        Self {
+            state: SyncStatusKind::Configured,
+            last_attempt_at: None,
+            error_summary: None,
+            retry_available: true,
+        }
+    }
+
+    fn syncing(&self) -> Self {
+        Self {
+            state: SyncStatusKind::Syncing,
+            last_attempt_at: self.last_attempt_at,
+            error_summary: None,
+            retry_available: false,
+        }
+    }
+
+    fn succeeded(at: DateTime<Utc>) -> Self {
+        Self {
+            state: SyncStatusKind::Succeeded,
+            last_attempt_at: Some(at),
+            error_summary: None,
+            retry_available: true,
+        }
+    }
+
+    fn failed(
+        at: DateTime<Utc>,
+        error_summary: String,
+    ) -> Self {
+        Self {
+            state: SyncStatusKind::Failed,
+            last_attempt_at: Some(at),
+            error_summary: Some(error_summary),
+            retry_available: true,
+        }
+    }
+
+    fn response(&self) -> SyncStatusResponse {
+        SyncStatusResponse {
+            state: self.state.api_value().to_string(),
+            last_attempt_at: self.last_attempt_at,
+            error_summary: self.error_summary.clone(),
+            retry_available: self.retry_available,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SyncStatusKind {
+    Disabled,
+    Configured,
+    Syncing,
+    Succeeded,
+    Failed,
+}
+
+impl SyncStatusKind {
+    fn api_value(self) -> &'static str {
+        match self {
+            Self::Disabled => "disabled",
+            Self::Configured => "configured",
+            Self::Syncing => "syncing",
+            Self::Succeeded => "succeeded",
+            Self::Failed => "failed",
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct AppState {
     service: Arc<Mutex<AppService>>,
@@ -42,6 +138,7 @@ pub struct AppState {
     ui_state_path: Option<Arc<PathBuf>>,
     storage_config: TaskChampionStorageConfig,
     sync_config: TaskChampionSyncConfig,
+    sync_status: Arc<Mutex<HttpSyncState>>,
 }
 
 impl Default for AppState {
@@ -56,6 +153,7 @@ impl Default for AppState {
             ui_state_path: None,
             storage_config: TaskChampionStorageConfig::InMemory,
             sync_config: TaskChampionSyncConfig::Disabled,
+            sync_status: Arc::new(Mutex::new(HttpSyncState::disabled())),
         }
     }
 }
@@ -66,6 +164,11 @@ impl AppState {
     ) -> Result<Self, ServiceError> {
         let storage_config = config.storage.clone();
         let sync_config = config.sync.clone();
+        let sync_status = if config.sync.is_enabled() {
+            HttpSyncState::configured()
+        } else {
+            HttpSyncState::disabled()
+        };
         let repository =
             TaskChampionTaskRepository::from_storage_config(config.storage)
                 .await?;
@@ -85,6 +188,7 @@ impl AppState {
             ui_state_path: ui_state.path.map(Arc::new),
             storage_config,
             sync_config,
+            sync_status: Arc::new(Mutex::new(sync_status)),
         })
     }
 }
@@ -249,6 +353,8 @@ pub fn build_router_with_state(state: AppState) -> Router {
             post(transition_board_lane),
         )
         .route("/tasks/query", post(query_tasks))
+        .route("/sync/status", get(get_sync_status))
+        .route("/sync/retry", post(retry_sync))
         .route("/views", get(list_saved_views))
         .route(
             "/views/{id}",
@@ -439,6 +545,18 @@ async fn query_tasks(
     }))
 }
 
+async fn get_sync_status(
+    State(state): State<AppState>
+) -> Json<SyncStatusResponse> {
+    Json(state.sync_status.lock().await.response())
+}
+
+async fn retry_sync(State(state): State<AppState>) -> Json<SyncStatusResponse> {
+    let _ = sync_configured_storage(&state).await;
+
+    Json(state.sync_status.lock().await.response())
+}
+
 async fn sync_configured_storage(
     state: &AppState
 ) -> Result<(), ServiceHttpError> {
@@ -446,9 +564,13 @@ async fn sync_configured_storage(
         return Ok(());
     }
 
+    let mut status = state.sync_status.lock().await;
+    *status = status.syncing();
+    drop(status);
+
     let storage = state.storage_config.clone();
     let sync = state.sync_config.clone();
-    tokio::task::spawn_blocking(move || {
+    let result = tokio::task::spawn_blocking(move || {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -465,18 +587,56 @@ async fn sync_configured_storage(
         })
     })
     .await
-    .map_err(sync_join_error)??;
+    .map_err(sync_join_error)
+    .and_then(|result| result);
 
-    let repository = TaskChampionTaskRepository::from_storage_config(
+    if let Err(error) = result {
+        record_sync_failure(state, &error).await;
+        return Err(error);
+    }
+
+    let repository = match TaskChampionTaskRepository::from_storage_config(
         state.storage_config.clone(),
     )
     .await
-    .map_err(sync_compat_error)?;
+    .map_err(sync_compat_error)
+    {
+        Ok(repository) => repository,
+        Err(error) => {
+            record_sync_failure(state, &error).await;
+            return Err(error);
+        }
+    };
     let sync = InMemorySyncCoordinator::configured(state.sync_config.clone());
     let mut service = state.service.lock().await;
     *service = TaskService::new(repository, sync);
+    *state.sync_status.lock().await = HttpSyncState::succeeded(Utc::now());
 
     Ok(())
+}
+
+async fn record_sync_failure(
+    state: &AppState,
+    error: &ServiceHttpError,
+) {
+    let summary = product_safe_sync_error(error);
+    *state.sync_status.lock().await =
+        HttpSyncState::failed(Utc::now(), summary);
+}
+
+fn product_safe_sync_error(error: &ServiceHttpError) -> String {
+    match &error.0 {
+        ServiceError::Sync(_) => {
+            "Task synchronization failed. Check backend sync configuration."
+                .to_string()
+        }
+        ServiceError::Compatibility(_) => {
+            "Task synchronization failed. Check sync server availability."
+                .to_string()
+        }
+        ServiceError::Validation(_) => "Sync request was invalid.".to_string(),
+        ServiceError::NotFound(_) => "Sync target was not found.".to_string(),
+    }
 }
 
 async fn list_saved_views(
@@ -904,10 +1064,11 @@ mod tests {
     use serde_json::{json, Value};
     use std::path::PathBuf;
     use taskwarrior_compat::{
-        TaskChampionLocalSyncConfig, TaskChampionStorageConfig,
-        TaskChampionSyncConfig,
+        TaskChampionLocalSyncConfig, TaskChampionRemoteSyncConfig,
+        TaskChampionStorageConfig, TaskChampionSyncConfig,
     };
     use tower::ServiceExt;
+    use uuid::Uuid;
 
     #[tokio::test]
     async fn http_routes_support_create_update_complete_and_query() {
@@ -1340,6 +1501,100 @@ mod tests {
         let _ = std::fs::remove_dir_all(server_dir);
         let _ = std::fs::remove_file(first_storage);
         let _ = std::fs::remove_file(second_storage);
+    }
+
+    #[tokio::test]
+    async fn sync_status_reports_disabled_state() {
+        let app = build_router();
+        let status = get_json(&app, "/sync/status").await;
+
+        assert_eq!(status["state"], "disabled");
+        assert_eq!(status["retry_available"], false);
+        assert_eq!(status["last_attempt_at"], Value::Null);
+        assert_eq!(status["error_summary"], Value::Null);
+    }
+
+    #[tokio::test]
+    async fn sync_retry_reports_invalid_sync_config_without_credentials() {
+        let state = AppState::from_config(BackendConfig {
+            sync: TaskChampionSyncConfig::Remote(
+                TaskChampionRemoteSyncConfig {
+                    url: "http://127.0.0.1:1".to_string(),
+                    client_id: Uuid::new_v4(),
+                    encryption_secret: b"secret".to_vec(),
+                    allow_plain_http: false,
+                },
+            ),
+            ..BackendConfig::default()
+        })
+        .await
+        .unwrap();
+        let app = super::build_router_with_state(state);
+
+        let status = post_json(&app, "/sync/retry", json!({})).await;
+
+        assert_eq!(status["state"], "failed");
+        assert_eq!(status["retry_available"], true);
+        assert!(status["last_attempt_at"].is_string());
+        assert_eq!(
+            status["error_summary"],
+            "Task synchronization failed. Check backend sync configuration."
+        );
+        assert!(!status["error_summary"]
+            .as_str()
+            .unwrap()
+            .contains("secret"));
+    }
+
+    #[tokio::test]
+    async fn sync_retry_reports_unavailable_sync_server() {
+        let state = AppState::from_config(BackendConfig {
+            sync: TaskChampionSyncConfig::Remote(
+                TaskChampionRemoteSyncConfig {
+                    url: "http://127.0.0.1:9".to_string(),
+                    client_id: Uuid::new_v4(),
+                    encryption_secret: b"secret".to_vec(),
+                    allow_plain_http: true,
+                },
+            ),
+            ..BackendConfig::default()
+        })
+        .await
+        .unwrap();
+        let app = super::build_router_with_state(state);
+
+        let status = post_json(&app, "/sync/retry", json!({})).await;
+
+        assert_eq!(status["state"], "failed");
+        assert_eq!(status["retry_available"], true);
+        assert!(status["error_summary"].as_str().unwrap().len() > 3);
+    }
+
+    #[tokio::test]
+    async fn sync_retry_recovers_after_local_server_becomes_available() {
+        let server_dir = temp_sync_server_path();
+        let state = AppState::from_config(BackendConfig {
+            sync: TaskChampionSyncConfig::Local(TaskChampionLocalSyncConfig {
+                server_dir: server_dir.clone(),
+            }),
+            ..BackendConfig::default()
+        })
+        .await
+        .unwrap();
+        let app = super::build_router_with_state(state);
+
+        let failed = post_json(&app, "/sync/retry", json!({})).await;
+        assert_eq!(failed["state"], "failed");
+
+        std::fs::create_dir_all(&server_dir).unwrap();
+        let recovered = post_json(&app, "/sync/retry", json!({})).await;
+
+        assert_eq!(recovered["state"], "succeeded");
+        assert_eq!(recovered["retry_available"], true);
+        assert_eq!(recovered["error_summary"], Value::Null);
+        assert!(recovered["last_attempt_at"].is_string());
+
+        let _ = std::fs::remove_dir_all(server_dir);
     }
 
     async fn create_http_task(

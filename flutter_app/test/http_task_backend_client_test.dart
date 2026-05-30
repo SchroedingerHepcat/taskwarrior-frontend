@@ -7,6 +7,59 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  test('syncStatus decodes product-safe sync state', () async {
+    final client = HttpTaskBackendClient(
+      baseUrl: 'http://127.0.0.1:8080',
+      client: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/sync/status');
+
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'state': 'failed',
+            'last_attempt_at': '2026-05-30T12:00:00Z',
+            'error_summary': 'Task sync server unavailable.',
+            'retry_available': true,
+          }),
+          200,
+        );
+      }),
+    );
+
+    final status = await client.syncStatus();
+
+    expect(status.state, BackendSyncState.failed);
+    expect(status.lastAttemptAt, DateTime.utc(2026, 5, 30, 12));
+    expect(status.errorSummary, 'Task sync server unavailable.');
+    expect(status.retryAvailable, isTrue);
+  });
+
+  test('retrySync posts retry request', () async {
+    final client = HttpTaskBackendClient(
+      baseUrl: 'http://127.0.0.1:8080',
+      client: MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/sync/retry');
+
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'state': 'succeeded',
+            'last_attempt_at': '2026-05-30T12:00:00Z',
+            'error_summary': null,
+            'retry_available': true,
+          }),
+          200,
+        );
+      }),
+    );
+
+    final status = await client.retrySync();
+
+    expect(status.state, BackendSyncState.succeeded);
+    expect(status.errorSummary, isNull);
+    expect(status.retryAvailable, isTrue);
+  });
+
   test('updateTask submits recurrence properties to backend', () async {
     Map<String, dynamic>? requestBody;
     final client = HttpTaskBackendClient(

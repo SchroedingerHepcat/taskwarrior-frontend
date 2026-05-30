@@ -48,6 +48,7 @@ class ShellController extends ChangeNotifier {
   bool _isSaving = false;
   String? _errorMessage;
   BackendHealth? _health;
+  BackendSyncStatus _syncStatus = const BackendSyncStatus.disabled();
   List<TaskItem> _allTasks = const <TaskItem>[];
   List<TaskItem> _listTasks = const <TaskItem>[];
   final Map<DashboardWidgetType, DashboardWidgetData> _dashboardWidgets =
@@ -69,6 +70,7 @@ class ShellController extends ChangeNotifier {
   bool get isSaving => _isSaving;
   String? get errorMessage => _errorMessage;
   BackendHealth? get health => _health;
+  BackendSyncStatus get syncStatus => _syncStatus;
   List<TaskItem> get allTasks => List.unmodifiable(_allTasks);
   List<TaskItem> get listTasks => List.unmodifiable(_listTasks);
   TaskListMode get listMode => _listMode;
@@ -105,11 +107,20 @@ class ShellController extends ChangeNotifier {
       return 'Connecting to HTTP backend';
     }
 
-    if (_errorMessage != null) {
+    if (_errorMessage != null && _health == null) {
       return 'Backend unavailable';
     }
 
-    return _health?.label ?? 'Backend ready';
+    return _health == null ? 'Backend ready' : 'Backend connected';
+  }
+
+  String get syncStatusLabel {
+    final error = _syncStatus.errorSummary;
+    if (error == null || error.isEmpty) {
+      return _syncStatus.label;
+    }
+
+    return '${_syncStatus.label}: $error';
   }
 
   TaskItem? get selectedTask {
@@ -129,6 +140,7 @@ class ShellController extends ChangeNotifier {
     if (_backend == null) {
       _isLoading = false;
       _errorMessage = 'Enter the backend API URL in Settings to connect.';
+      _syncStatus = const BackendSyncStatus.disabled();
       notifyListeners();
       return;
     }
@@ -559,6 +571,37 @@ class ShellController extends ChangeNotifier {
     await _refresh();
   }
 
+  Future<void> retrySync() async {
+    final backend = _backend;
+    if (backend == null) {
+      _errorMessage = 'Enter the backend API URL in Settings to connect.';
+      notifyListeners();
+      return;
+    }
+
+    _syncStatus = const BackendSyncStatus(
+      state: BackendSyncState.syncing,
+      retryAvailable: false,
+    );
+    notifyListeners();
+
+    try {
+      _syncStatus = await backend.retrySync();
+      if (_syncStatus.state != BackendSyncState.failed) {
+        _errorMessage = null;
+      }
+      await _refresh(showLoading: false);
+    } catch (error) {
+      _syncStatus = BackendSyncStatus(
+        state: BackendSyncState.failed,
+        retryAvailable: true,
+        errorSummary: _humanReadableError(error),
+      );
+      _errorMessage = _humanReadableError(error);
+      notifyListeners();
+    }
+  }
+
   String _normalizeBackendUrl(String raw) {
     final trimmed = raw.trim();
     if (trimmed.isEmpty) {
@@ -624,6 +667,7 @@ class ShellController extends ChangeNotifier {
     if (backend == null) {
       _isLoading = false;
       _errorMessage = 'Enter the backend API URL in Settings to connect.';
+      _syncStatus = const BackendSyncStatus.disabled();
       notifyListeners();
       return;
     }
@@ -636,12 +680,20 @@ class ShellController extends ChangeNotifier {
 
     try {
       _health = await backend.healthcheck();
+      _syncStatus = await backend.syncStatus();
       _backendSavedViews = await backend.listSavedViews();
       _backendDashboardLayouts = await backend.listDashboardLayouts();
       await _refreshTaskViews();
       await _refreshDashboardWidgets();
     } catch (error) {
       _errorMessage = _humanReadableError(error);
+      if (_health != null) {
+        try {
+          _syncStatus = await backend.syncStatus();
+        } catch (_) {
+          // Keep the last known sync status when only an API call failed.
+        }
+      }
     } finally {
       if (showLoading) {
         _isLoading = false;
@@ -656,6 +708,7 @@ class ShellController extends ChangeNotifier {
     if (backend == null) {
       _allTasks = const <TaskItem>[];
       _listTasks = const <TaskItem>[];
+      _syncStatus = const BackendSyncStatus.disabled();
       return;
     }
 

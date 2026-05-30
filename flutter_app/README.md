@@ -18,9 +18,13 @@ Current scope:
   properties without creating recurrence child tasks in Flutter
 - an HTTP backend client used by the application entry point
 - app-configured backend API URL persistence across restarts
+- compact sync status controls that separate backend connectivity from
+  TaskChampion task-sync state and expose retry when available
 - a local development adapter retained for widget tests and local UI work
 
 This package keeps backend access behind a client boundary so screen logic
 does not depend on transport or storage details. The default app entry point
 targets the Rust HTTP server. Taskwarrior and TaskChampion semantics still stay
-behind Rust boundaries rather than moving into Flutter.
+behind Rust boundaries rather than moving into Flutter. TaskChampion sync
+server credentials, replica identifiers, storage paths, and raw sync errors
+remain backend-internal.

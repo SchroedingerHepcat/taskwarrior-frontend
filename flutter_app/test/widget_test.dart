@@ -130,7 +130,66 @@ void main() {
 
     expect(backend.healthChecks, 1);
     expect(backend.queryCalls, greaterThanOrEqualTo(3));
-    expect(find.text('Local development adapter ready'), findsOneWidget);
+    expect(find.byKey(const Key('sync-status-button')), findsWidgets);
+    expect(find.text('Local development adapter ready'), findsNothing);
+  });
+
+  testWidgets('sync status shows backend reachability separately',
+      (tester) async {
+    final backend = _FakeBackendClient(
+      syncStatus: const BackendSyncStatus(
+        state: BackendSyncState.failed,
+        retryAvailable: true,
+        errorSummary: 'Task sync server unavailable.',
+      ),
+    );
+
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: backend,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('sync-status-button')).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Backend: Backend connected'), findsOneWidget);
+    expect(find.text('Task sync: Task sync failed'), findsOneWidget);
+    expect(find.text('Task sync server unavailable.'), findsOneWidget);
+    expect(find.byKey(const Key('sync-retry-button')), findsOneWidget);
+  });
+
+  testWidgets('sync retry refreshes task sync state', (tester) async {
+    final backend = _FakeBackendClient(
+      syncStatus: const BackendSyncStatus(
+        state: BackendSyncState.failed,
+        retryAvailable: true,
+        errorSummary: 'Task sync server unavailable.',
+      ),
+    );
+
+    await tester.pumpWidget(
+      TaskwarriorFrontendApp(
+        backend: backend,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    backend.syncStatusValue = BackendSyncStatus(
+      state: BackendSyncState.succeeded,
+      retryAvailable: true,
+      lastAttemptAt: DateTime.utc(2026, 5, 30, 12),
+    );
+    await tester.tap(find.byKey(const Key('sync-status-button')).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('sync-retry-button')));
+    await tester.pumpAndSettle();
+
+    expect(backend.retryCalls, 1);
+    await tester.tap(find.byKey(const Key('sync-status-button')).first);
+    await tester.pumpAndSettle();
+    expect(find.text('Task sync: Tasks synced'), findsOneWidget);
   });
 
   testWidgets('quick create submits with enter', (tester) async {
@@ -576,7 +635,7 @@ void main() {
       find.byKey(const Key('settings-connection-label')),
     );
 
-    expect(label.data, 'Replacement backend');
+    expect(label.data, 'Backend connected');
   });
 
   testWidgets('settings normalizes bare backend host to http', (tester) async {
@@ -954,6 +1013,16 @@ class _FailingBackendClient implements TaskBackendClient {
   }
 
   @override
+  Future<BackendSyncStatus> syncStatus() {
+    throw Exception('ClientException with SocketException: Connection refused');
+  }
+
+  @override
+  Future<BackendSyncStatus> retrySync() {
+    throw Exception('ClientException with SocketException: Connection refused');
+  }
+
+  @override
   Future<TaskItem> createTask(CreateTaskInput input) {
     throw UnimplementedError();
   }
@@ -1026,10 +1095,13 @@ class _FailingBackendClient implements TaskBackendClient {
 class _FakeBackendClient implements TaskBackendClient {
   _FakeBackendClient({
     this.label = 'Local development adapter ready',
-  });
+    BackendSyncStatus syncStatus = const BackendSyncStatus.disabled(),
+  }) : syncStatusValue = syncStatus;
 
   final String label;
+  BackendSyncStatus syncStatusValue;
   int healthChecks = 0;
+  int retryCalls = 0;
   int queryCalls = 0;
   final List<TaskQuery> queries = <TaskQuery>[];
   final List<String> createdDescriptions = <String>[];
@@ -1089,6 +1161,17 @@ class _FakeBackendClient implements TaskBackendClient {
       label: label,
       environment: 'Backend scaffold mirror',
     );
+  }
+
+  @override
+  Future<BackendSyncStatus> syncStatus() async {
+    return syncStatusValue;
+  }
+
+  @override
+  Future<BackendSyncStatus> retrySync() async {
+    retryCalls += 1;
+    return syncStatusValue;
   }
 
   @override

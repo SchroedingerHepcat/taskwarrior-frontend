@@ -368,24 +368,9 @@ class _ShellHeader extends StatelessWidget {
                 ],
               ),
             ),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme
-                    .primary
-                    .withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                child: Text(
-                  controller.connectionLabel,
-                  key: const Key('connection-pill'),
-                ),
-              ),
+            _SyncStatusButton(
+              controller: controller,
+              key: const Key('connection-pill'),
             ),
           ],
         ),
@@ -483,7 +468,15 @@ class _ContextPanel extends StatelessWidget {
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 16),
-            Text(controller.connectionLabel),
+            Row(
+              children: <Widget>[
+                _SyncStatusButton(controller: controller),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(controller.connectionLabel),
+                ),
+              ],
+            ),
             const SizedBox(height: 24),
             if (task != null) ...<Widget>[
               Text(
@@ -510,6 +503,124 @@ class _ContextPanel extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _SyncStatusButton extends StatelessWidget {
+  const _SyncStatusButton({
+    super.key,
+    required this.controller,
+  });
+
+  final ShellController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final status = controller.syncStatus;
+    final backendConnected = controller.health != null;
+    final icon = _syncIcon(
+      status.state,
+      backendConnected: backendConnected,
+    );
+    final color = _syncColor(
+      theme,
+      status.state,
+      backendConnected: backendConnected,
+    );
+    final tooltip = '${controller.connectionLabel}. '
+        '${controller.syncStatusLabel}.';
+
+    return IconButton.filledTonal(
+      key: const Key('sync-status-button'),
+      tooltip: tooltip,
+      onPressed: () => _showSyncDetails(context),
+      color: color,
+      icon: Icon(icon),
+    );
+  }
+
+  IconData _syncIcon(
+    BackendSyncState state, {
+    required bool backendConnected,
+  }) {
+    if (!backendConnected) {
+      return Icons.cloud_off_outlined;
+    }
+
+    return switch (state) {
+      BackendSyncState.disabled => Icons.cloud_queue_outlined,
+      BackendSyncState.configured => Icons.cloud_sync_outlined,
+      BackendSyncState.syncing => Icons.sync_outlined,
+      BackendSyncState.succeeded => Icons.cloud_done_outlined,
+      BackendSyncState.failed => Icons.cloud_off_outlined,
+    };
+  }
+
+  Color _syncColor(
+    ThemeData theme,
+    BackendSyncState state, {
+    required bool backendConnected,
+  }) {
+    if (!backendConnected) {
+      return theme.colorScheme.error;
+    }
+
+    return switch (state) {
+      BackendSyncState.disabled => theme.colorScheme.onSurfaceVariant,
+      BackendSyncState.configured => theme.colorScheme.primary,
+      BackendSyncState.syncing => theme.colorScheme.primary,
+      BackendSyncState.succeeded => Colors.green,
+      BackendSyncState.failed => theme.colorScheme.error,
+    };
+  }
+
+  Future<void> _showSyncDetails(BuildContext context) {
+    final status = controller.syncStatus;
+
+    return showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Connection status'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text('Backend: ${controller.connectionLabel}'),
+              const SizedBox(height: 8),
+              Text('Task sync: ${status.label}'),
+              if (status.lastAttemptAt != null) ...<Widget>[
+                const SizedBox(height: 8),
+                Text(
+                  'Last attempt: '
+                  '${status.lastAttemptAt!.toLocal()}',
+                ),
+              ],
+              if (status.errorSummary != null) ...<Widget>[
+                const SizedBox(height: 8),
+                Text(status.errorSummary!),
+              ],
+            ],
+          ),
+          actions: <Widget>[
+            if (status.retryAvailable)
+              TextButton(
+                key: const Key('sync-retry-button'),
+                onPressed: () async {
+                  Navigator.of(context).pop();
+                  await controller.retrySync();
+                },
+                child: const Text('Retry sync'),
+              ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
     );
   }
 }

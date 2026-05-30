@@ -105,6 +105,16 @@ pub fn api_spec() -> &'static [ApiEndpoint] {
         },
         ApiEndpoint {
             method: ApiMethod::Get,
+            path: "/sync/status",
+            summary: "Get product-safe sync status",
+        },
+        ApiEndpoint {
+            method: ApiMethod::Post,
+            path: "/sync/retry",
+            summary: "Retry configured task synchronization",
+        },
+        ApiEndpoint {
+            method: ApiMethod::Get,
             path: "/views",
             summary: "List saved task views",
         },
@@ -207,11 +217,21 @@ mod tests {
     fn api_spec_covers_health_and_task_operations() {
         let endpoints = api_spec();
 
-        assert_eq!(endpoints.len(), 13);
+        assert_eq!(endpoints.len(), 15);
         assert!(endpoints.contains(&super::ApiEndpoint {
             method: ApiMethod::Get,
             path: "/tasks/{id}",
             summary: "Get task detail",
+        }));
+        assert!(endpoints.contains(&super::ApiEndpoint {
+            method: ApiMethod::Get,
+            path: "/sync/status",
+            summary: "Get product-safe sync status",
+        }));
+        assert!(endpoints.contains(&super::ApiEndpoint {
+            method: ApiMethod::Post,
+            path: "/sync/retry",
+            summary: "Retry configured task synchronization",
         }));
     }
 

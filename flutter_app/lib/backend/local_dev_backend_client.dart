@@ -23,6 +23,20 @@ class LocalDevelopmentBackendClient implements TaskBackendClient {
   }
 
   @override
+  Future<BackendSyncStatus> syncStatus() async {
+    await Future<void>.delayed(_latency);
+
+    return const BackendSyncStatus.disabled();
+  }
+
+  @override
+  Future<BackendSyncStatus> retrySync() async {
+    await Future<void>.delayed(_latency);
+
+    return const BackendSyncStatus.disabled();
+  }
+
+  @override
   Future<TaskItem> createTask(CreateTaskInput input) async {
     await Future<void>.delayed(_latency);
 
