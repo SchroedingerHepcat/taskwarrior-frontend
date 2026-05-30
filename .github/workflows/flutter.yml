@@ -32,9 +32,13 @@ jobs:
         run: flutter analyze
       - name: Widget Tests
         run: flutter test
+      - name: Build Rust Test Backend
+        working-directory: rust
+        run: cargo build -p server
       - name: Integration Tests
         run: |
-          xvfb-run -a flutter test -d linux \
+          xvfb-run -a -s "-screen 0 1920x1080x24" \
+            flutter test -d linux \
             integration_test/app_shell_test.dart
 
   build-web:

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -48,20 +49,21 @@ void main() {
       find.byKey(const Key('detail-tags-field')),
       'demo, integration',
     );
+    await _waitForEnabled(
+      tester,
+      const Key('detail-add-note-button'),
+    );
+
     await tester.enterText(
       find.byKey(const Key('detail-annotation-field')),
       'ready to complete',
     );
+    await _waitForEnabled(
+      tester,
+      const Key('detail-add-note-button'),
+    );
     await tester.tap(find.byKey(const Key('detail-add-note-button')));
     await tester.pumpAndSettle();
-
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('task-detail-screen')),
-        matching: find.text('ready to complete'),
-      ),
-      findsOneWidget,
-    );
 
     await tester.tap(find.byKey(const Key('detail-toggle-status-button')));
     await tester.pumpAndSettle();
@@ -74,7 +76,39 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Milestone 4 integration task'), findsWidgets);
+
+    final backendTask = await server.findTask(
+      'Milestone 4 integration task',
+    );
+    expect(backendTask['project'], 'frontend');
+    expect(backendTask['status'], 'completed');
+    expect(backendTask['tags'], contains('demo'));
+    expect(backendTask['tags'], contains('integration'));
+    expect(
+      (backendTask['annotations'] as List<dynamic>).map(
+        (annotation) => annotation['description'],
+      ),
+      contains('ready to complete'),
+    );
   });
+}
+
+Future<void> _waitForEnabled(
+  WidgetTester tester,
+  Key key,
+) async {
+  final finder = find.byKey(key);
+
+  for (var attempt = 0; attempt < 80; attempt += 1) {
+    final button = tester.widget<OutlinedButton>(finder);
+    if (button.onPressed != null) {
+      return;
+    }
+
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+
+  throw StateError('Button $key did not become enabled');
 }
 
 class _RustServer {
@@ -99,7 +133,12 @@ class _RustServer {
       baseUrl: 'http://127.0.0.1:$port',
       process: process,
     );
-    await server._waitUntilHealthy();
+    try {
+      await server._waitUntilHealthy();
+    } catch (_) {
+      await server.stop();
+      rethrow;
+    }
     return server;
   }
 
@@ -112,10 +151,37 @@ class _RustServer {
     }
   }
 
+  Future<Map<String, dynamic>> findTask(String description) async {
+    final client = HttpClient();
+    final request = await client.postUrl(Uri.parse('$baseUrl/tasks/query'));
+    request.headers.contentType = ContentType.json;
+    request.write(
+      jsonEncode(<String, Object?>{
+        'statuses': <String>['completed'],
+        'include_waiting': true,
+        'include_scheduled': true,
+      }),
+    );
+    final response = await request.close();
+    final body = await response.transform(utf8.decoder).join();
+    client.close(force: true);
+
+    if (response.statusCode != 200) {
+      throw StateError('Task query failed: ${response.statusCode} $body');
+    }
+
+    final decoded = jsonDecode(body) as Map<String, dynamic>;
+    final tasks = decoded['tasks'] as List<dynamic>;
+
+    return tasks.cast<Map<String, dynamic>>().firstWhere(
+          (task) => task['description'] == description,
+        );
+  }
+
   Future<void> _waitUntilHealthy() async {
     final client = HttpClient();
 
-    for (var attempt = 0; attempt < 40; attempt += 1) {
+    for (var attempt = 0; attempt < 240; attempt += 1) {
       try {
         final request = await client.getUrl(Uri.parse('$baseUrl/health'));
         final response = await request.close();
@@ -129,6 +195,8 @@ class _RustServer {
     }
 
     client.close(force: true);
-    throw StateError('Rust server did not become healthy');
+    throw StateError(
+      'Rust server did not become healthy at $baseUrl',
+    );
   }
 }
