@@ -37,6 +37,8 @@ void main() {
 
     await tester.tap(find.text('Milestone 4 integration task').first);
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Open details').last);
+    await tester.pumpAndSettle();
 
     await tester.enterText(
       find.byKey(const Key('detail-project-field')),
@@ -50,7 +52,7 @@ void main() {
       find.byKey(const Key('detail-annotation-field')),
       'ready to complete',
     );
-    await tester.tap(find.byKey(const Key('detail-save-button')));
+    await tester.tap(find.byKey(const Key('detail-add-note-button')));
     await tester.pumpAndSettle();
 
     expect(
