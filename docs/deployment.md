@@ -265,7 +265,9 @@ resources.
 - Authentication and authorization are not implemented yet.
 - Public sync status and retry controls are planned for Milestone 7.
 - Conflict resolution UX is planned for Milestone 7.
-- Compatibility with a separately hosted remote TaskChampion sync server still
-  needs an automated deployment proof in Milestone 7.
+- External TaskChampion sync-server compatibility is covered by the ignored
+  `external_taskchampion_sync` Rust integration test, which starts a temporary
+  upstream sync-server container and verifies backend and Taskwarrior
+  interoperability.
 - Migration procedures for future storage format changes still need production
   hardening.

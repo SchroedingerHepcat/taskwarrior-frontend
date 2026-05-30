@@ -18,7 +18,17 @@ authentication, user-facing sync controls, or conflict handling.
 The Rust backend has internal configuration for in-memory TaskChampion storage
 used by tests and SQLite-backed TaskChampion storage for durable deployment
 paths. It also has an internal sync coordinator boundary and a local
-TaskChampion sync proof between two backend replicas.
+TaskChampion sync proof between two backend replicas. External
+TaskChampion sync-server compatibility can be proved with the ignored
+`external_taskchampion_sync` Rust integration test, which starts a temporary
+upstream sync server and verifies backend and Taskwarrior CLI interoperability.
+Run it with:
+
+```sh
+cargo test --manifest-path rust/Cargo.toml -p server \
+  --test external_taskchampion_sync -- --ignored --nocapture
+```
+
 The server binary now defaults to SQLite TaskChampion storage at
 `taskwarrior-frontend-tasks.sqlite`; set `--taskchampion-storage-path` or
 `TASKCHAMPION_STORAGE_PATH` to choose another location.
@@ -41,7 +51,7 @@ servers require `--taskchampion-allow-plain-http` or
 
 See `deploy/backend.example.toml` for an example sectioned configuration
 file. See `docs/deployment.md` for the Docker Compose self-hosting path.
-For Docker Compose sync-server testing without editing committed files, copy
+For Docker Compose sync-server credentials without editing committed files, copy
 `deploy/docker-compose.override.example.yaml` to
 `deploy/docker-compose.override.yaml` and put local credentials there. The
 override file is ignored by git. Use both compose files when starting the

@@ -382,8 +382,7 @@ deployment and basic operational controls.
   checks, logs, backup/restore, local override configuration, and pairing with
   a separately hosted TaskChampion sync server.
 - Migration hardening for future durable storage format changes remains open.
-- A real external TaskChampion sync-server deployment test remains open for
-  Milestone 7.
+- A real external TaskChampion sync-server proof now exists for Milestone 7.
 - User-facing sync status and retry controls remain part of Milestone 7.
 
 ## Milestone 7: Sync, Error, And Conflict UX
@@ -426,8 +425,10 @@ clients, especially once multiple devices are in use.
   TaskChampion sync proof between two backend replicas.
 - HTTP task writes now sync after local TaskChampion mutation, and HTTP task
   reads sync before serving product queries when sync is configured.
-- Compatibility with a separately hosted TaskChampion sync server remains open
-  until tested against that server or an equivalent test service.
+- Compatibility with a separately hosted TaskChampion sync server is covered
+  by an ignored integration proof that starts
+  `ghcr.io/gothenburgbitfactory/taskchampion-sync-server`, syncs two backend
+  replicas, and verifies Taskwarrior CLI interoperability.
 - Offline write reconciliation remains open.
 - A durable error model from the API boundary will likely need to solidify here
   if it has not already been finalized earlier.

@@ -159,8 +159,10 @@ The server crate now separates:
 
 The server boundary now proves that local TaskChampion sync can move tasks
 between two backend replicas without exposing TaskChampion internals to
-Flutter. It does not yet prove compatibility with a separately hosted remote
-TaskChampion sync server.
+Flutter. It also proves compatibility with a separately hosted
+TaskChampion sync server by syncing backend-created task changes to
+Taskwarrior and syncing Taskwarrior-created recurring tasks back to a second
+backend replica.
 
 Flutter stores the product backend API URL locally and can change it from the
 Settings screen. The app does not require that URL to be baked into the build.
@@ -212,7 +214,6 @@ silently ignored.
 ## Open questions
 
 - public sync status and control endpoints, if any
-- externally hosted TaskChampion sync-server compatibility test coverage
 - authentication model
 - offline write reconciliation
 - conflict behavior across synchronized replicas

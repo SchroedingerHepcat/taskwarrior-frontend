@@ -355,6 +355,11 @@ code and tests in this repository:
   tests, and remote sync-server connection details
 - local TaskChampion sync proof moving a task between two backend replicas
   through TaskChampion sync APIs
+- external TaskChampion sync proof using
+  `ghcr.io/gothenburgbitfactory/taskchampion-sync-server`, where backend A
+  creates and updates a task, Taskwarrior pulls those changes, Taskwarrior
+  adds a recurring task with project and tags, and backend B reads it after
+  sync
 - HTTP task writes syncing to a TaskChampion server and HTTP task reads
   pulling from that server before serving product-facing queries
 - a Flutter shell boundary that routes user navigation and screen state through
@@ -388,12 +393,11 @@ The following areas are still open and should not be treated as proven yet:
 - production deployment of durable TaskChampion storage, including migration,
   backup, and operational checks
 - sync conflict behavior, retry behavior, and user-facing sync state
-- tests for syncing the backend replica with an external remote TaskChampion
-  sync server
 - whether additional protocols are needed beyond the current HTTP boundary
 - task completion and deletion side effects beyond basic `end` timestamping
   and dependency unblocking in query presets
-- replica orchestration beyond the first local TaskChampion sync proof
+- replica orchestration beyond the first local and external TaskChampion sync
+  proofs
 
 ## Main Risks In The Recommended Architecture
 

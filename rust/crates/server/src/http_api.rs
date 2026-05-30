@@ -467,6 +467,15 @@ async fn sync_configured_storage(
     .await
     .map_err(sync_join_error)??;
 
+    let repository = TaskChampionTaskRepository::from_storage_config(
+        state.storage_config.clone(),
+    )
+    .await
+    .map_err(sync_compat_error)?;
+    let sync = InMemorySyncCoordinator::configured(state.sync_config.clone());
+    let mut service = state.service.lock().await;
+    *service = TaskService::new(repository, sync);
+
     Ok(())
 }
 
