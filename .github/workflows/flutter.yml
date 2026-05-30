@@ -56,11 +56,22 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-      - uses: browser-actions/setup-geckodriver@v1
-      - name: Install Firefox
+      - name: Install Firefox And Geckodriver
         run: |
           sudo apt-get update
-          sudo apt-get install -y firefox
+          sudo apt-get install -y ca-certificates curl firefox
+          geckodriver_version="${GECKODRIVER_VERSION:-v0.36.0}"
+          geckodriver_archive="geckodriver-${geckodriver_version}-linux64"
+          geckodriver_base="https://github.com/mozilla/geckodriver"
+          geckodriver_url="${geckodriver_base}/releases/download"
+          geckodriver_url="${geckodriver_url}/${geckodriver_version}"
+          geckodriver_url="${geckodriver_url}/${geckodriver_archive}.tar.gz"
+          curl -fsSL \
+            "$geckodriver_url" \
+            -o /tmp/geckodriver.tar.gz
+          tar -xzf /tmp/geckodriver.tar.gz -C /tmp
+          sudo install -m 0755 /tmp/geckodriver /usr/local/bin/geckodriver
+          geckodriver --version
       - name: Get dependencies
         run: flutter pub get
       - name: Chrome Shell Parity Tests
