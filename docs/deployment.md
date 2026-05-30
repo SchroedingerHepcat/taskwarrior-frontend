@@ -106,6 +106,27 @@ TOML file. The main operator settings are:
 - `--taskchampion-storage-path` or `TASKCHAMPION_STORAGE_PATH`
 - `--config` or `TASKWARRIOR_FRONTEND_CONFIG`
 
+To test local settings without editing committed config, copy the tracked
+override example:
+
+```sh
+cp deploy/docker-compose.override.example.yaml \
+  deploy/docker-compose.override.yaml
+```
+
+Then edit `deploy/docker-compose.override.yaml`. That file is ignored by git.
+The example uses environment variables because environment overrides the
+mounted TOML file.
+
+When using the override file, pass both compose files:
+
+```sh
+docker compose \
+  -f deploy/docker-compose.yaml \
+  -f deploy/docker-compose.override.yaml \
+  up --build
+```
+
 ## External TaskChampion Sync Server
 
 This project does not replace a TaskChampion sync server. To pair the backend
@@ -129,6 +150,21 @@ Plain HTTP should only be enabled for trusted local deployments:
 allow_plain_http = true
 ```
 
+For Docker Compose, use `deploy/docker-compose.override.yaml` to set the
+matching environment variables without changing committed TOML:
+
+```yaml
+services:
+  backend:
+    environment:
+      TASKCHAMPION_SYNC_URL: "https://sync.example.com"
+      TASKCHAMPION_CLIENT_ID: "00000000-0000-0000-0000-000000000001"
+      TASKCHAMPION_ENCRYPTION_SECRET: "replace-me"
+      TASKCHAMPION_ALLOW_PLAIN_HTTP: "false"
+```
+
+Start the stack with both compose files so the override is applied.
+
 ## Health Checks
 
 Backend health:
@@ -150,6 +186,36 @@ curl -fsS http://127.0.0.1:38181/
 ```
 
 The compose file also defines container health checks for both services.
+
+For container state and logs:
+
+```sh
+docker compose -f deploy/docker-compose.yaml ps
+docker compose -f deploy/docker-compose.yaml logs backend
+docker compose -f deploy/docker-compose.yaml logs web
+```
+
+Backend startup failures usually come from invalid TOML, unwritable
+`deploy/data`, or sync-server configuration errors. Sync errors are returned
+from task requests rather than silently ignored.
+
+## Backup And Restore
+
+For the current single-node deployment, back up the whole `deploy/data`
+directory. That keeps TaskChampion SQLite storage and shared UI state together.
+
+Stop the containers before copying the files:
+
+```sh
+docker compose -f deploy/docker-compose.yaml down
+cp -a deploy/data deploy/data.backup
+docker compose -f deploy/docker-compose.yaml up --build
+```
+
+To restore, stop the containers, replace `deploy/data` with the backup, and
+start the stack again. Do not use file synchronization tools to keep
+`deploy/data` live-synchronized between machines; use TaskChampion sync for
+task synchronization.
 
 ## Manual Local Run
 
@@ -199,7 +265,7 @@ resources.
 - Authentication and authorization are not implemented yet.
 - Public sync status and retry controls are planned for Milestone 7.
 - Conflict resolution UX is planned for Milestone 7.
-- Backup, migration, and restore procedures for the SQLite files still need
-  production hardening.
 - Compatibility with a separately hosted remote TaskChampion sync server still
-  needs an automated deployment proof.
+  needs an automated deployment proof in Milestone 7.
+- Migration procedures for future storage format changes still need production
+  hardening.

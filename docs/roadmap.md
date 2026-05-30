@@ -311,7 +311,7 @@ board views, and advanced filtering.
 
 ## Milestone 6: Self-Hosted Deployment
 
-Status: in progress
+Status: complete
 
 ### Goal
 
@@ -375,12 +375,15 @@ deployment and basic operational controls.
   client, uses a durable local filesystem bind mount for backend state,
   avoids build-time backend URL configuration, and defines container health
   checks.
+- Deployment CI validates Docker Compose configuration and builds the compose
+  images.
 - `docs/deployment.md` documents Docker Compose and manual local run commands,
   durable TaskChampion storage, durable UI state, TOML configuration, health
-  checks, and pairing with a separately hosted TaskChampion sync server.
-- Deployment packaging, migration, backup, and operational validation for
-  durable TaskChampion storage remain open.
-- A real external TaskChampion sync-server deployment test remains open.
+  checks, logs, backup/restore, local override configuration, and pairing with
+  a separately hosted TaskChampion sync server.
+- Migration hardening for future durable storage format changes remains open.
+- A real external TaskChampion sync-server deployment test remains open for
+  Milestone 7.
 - User-facing sync status and retry controls remain part of Milestone 7.
 
 ## Milestone 7: Sync, Error, And Conflict UX

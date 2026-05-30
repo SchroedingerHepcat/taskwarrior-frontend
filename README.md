@@ -41,6 +41,11 @@ servers require `--taskchampion-allow-plain-http` or
 
 See `deploy/backend.example.toml` for an example sectioned configuration
 file. See `docs/deployment.md` for the Docker Compose self-hosting path.
+For Docker Compose sync-server testing without editing committed files, copy
+`deploy/docker-compose.override.example.yaml` to
+`deploy/docker-compose.override.yaml` and put local credentials there. The
+override file is ignored by git. Use both compose files when starting the
+stack so the override is applied.
 
 The Flutter app currently includes responsive dashboard, list, board, and
 detail screens backed by that HTTP API. It now proves end-to-end create,

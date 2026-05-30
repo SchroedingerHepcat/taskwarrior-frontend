@@ -1,0 +1,7 @@
+services:
+  backend:
+    environment:
+      TASKCHAMPION_SYNC_URL: "https://sync.example.com"
+      TASKCHAMPION_CLIENT_ID: "00000000-0000-0000-0000-000000000001"
+      TASKCHAMPION_ENCRYPTION_SECRET: "replace-me"
+      TASKCHAMPION_ALLOW_PLAIN_HTTP: "false"
