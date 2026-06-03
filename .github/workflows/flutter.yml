@@ -213,5 +213,5 @@ jobs:
           profile: pixel_6
           working-directory: flutter_app
           script: |
-            flutter test -d emulator-5554 \
-              integration_test/shell_parity_test.dart
+            test_target="integration_test/shell_parity_test.dart"
+            flutter test -d emulator-5554 "$test_target"
