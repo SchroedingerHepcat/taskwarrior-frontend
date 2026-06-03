@@ -207,11 +207,12 @@ jobs:
         run: flutter pub get
       - name: Android Shell Parity Tests
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          TEST_TARGET: integration_test/shell_parity_test.dart
         with:
           api-level: 35
           arch: x86_64
           profile: pixel_6
           working-directory: flutter_app
           script: |
-            test_target="integration_test/shell_parity_test.dart"
-            flutter test -d emulator-5554 "$test_target"
+            flutter test -d emulator-5554 "$TEST_TARGET"
