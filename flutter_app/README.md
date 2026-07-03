@@ -29,6 +29,8 @@ task creation, visible text, sync status presentation, and wide-layout column
 separation without depending on TaskChampion storage. The web CI path also
 starts the Rust backend and runs a browser smoke test in Chrome and Firefox to
 prove live backend reachability, CORS, task creation, and query behavior.
+The Android CI path starts the same Rust backend and runs the live backend
+smoke test through the emulator using Android's `10.0.2.2` host alias.
 
 This package keeps backend access behind a client boundary so screen logic
 does not depend on transport or storage details. The default app entry point
