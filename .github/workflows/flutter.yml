@@ -75,15 +75,15 @@ jobs:
           geckodriver --version
       - name: Get dependencies
         run: flutter pub get
+      - name: Build Web Test Backend
+        working-directory: rust
+        run: cargo build -p server
       - name: Start Rust Test Backend
         run: |
           state_dir="$(mktemp -d)"
           export TASKCHAMPION_STORAGE_PATH="${state_dir}/tasks.sqlite"
           export TASKWARRIOR_FRONTEND_UI_STATE_PATH="${state_dir}/ui.json"
-          nohup cargo run \
-            --manifest-path ../rust/Cargo.toml \
-            -p server \
-            -- \
+          nohup ../rust/target/debug/server \
             --host 127.0.0.1 \
             --port 38182 \
             > /tmp/taskwarrior-web-smoke.log 2>&1 &
@@ -287,20 +287,17 @@ jobs:
       - name: Android Shell Parity Tests
         uses: reactivecircus/android-emulator-runner@v2
         env:
+          ANDROID_DEVICE: emulator-5554
+          BACKEND_DEFINE: BACKEND_URL=http://10.0.2.2:38184
           TEST_TARGET: integration_test/shell_parity_test.dart
           BACKEND_TEST_TARGET: integration_test/web_backend_smoke_test.dart
-          BACKEND_URL: http://10.0.2.2:38184
         with:
           api-level: 35
           arch: x86_64
           profile: pixel_6
           working-directory: flutter_app
           script: |
-            flutter test -d emulator-5554 "$TEST_TARGET"
-            flutter test \
-              -d emulator-5554 \
-              --dart-define=BACKEND_URL="$BACKEND_URL" \
-              "$BACKEND_TEST_TARGET"
+            bash tool/run_android_backend_smoke.sh
       - name: Stop Android Rust Test Backend
         if: always()
         run: |
