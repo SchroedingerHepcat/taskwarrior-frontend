@@ -26,7 +26,9 @@ UI validation includes widget tests, a Linux HTTP integration test, and a
 shared shell parity integration test intended to run on Linux, Chrome,
 Firefox, and Android emulator targets. The parity test checks core navigation,
 task creation, visible text, sync status presentation, and wide-layout column
-separation without depending on TaskChampion storage.
+separation without depending on TaskChampion storage. The web CI path also
+starts the Rust backend and runs a browser smoke test in Chrome and Firefox to
+prove live backend reachability, CORS, task creation, and query behavior.
 
 This package keeps backend access behind a client boundary so screen logic
 does not depend on transport or storage details. The default app entry point

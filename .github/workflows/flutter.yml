@@ -56,6 +56,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+      - uses: dtolnay/rust-toolchain@stable
       - name: Install Firefox And Geckodriver
         run: |
           sudo apt-get update
@@ -74,6 +75,28 @@ jobs:
           geckodriver --version
       - name: Get dependencies
         run: flutter pub get
+      - name: Start Rust Test Backend
+        run: |
+          state_dir="$(mktemp -d)"
+          export TASKCHAMPION_STORAGE_PATH="${state_dir}/tasks.sqlite"
+          export TASKWARRIOR_FRONTEND_UI_STATE_PATH="${state_dir}/ui.json"
+          nohup cargo run \
+            --manifest-path ../rust/Cargo.toml \
+            -p server \
+            -- \
+            --host 127.0.0.1 \
+            --port 38182 \
+            > /tmp/taskwarrior-web-smoke.log 2>&1 &
+          server_pid="$!"
+          echo "$server_pid" > /tmp/taskwarrior-web-smoke.pid
+          for _ in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:38182/health; then
+              exit 0
+            fi
+            sleep 0.25
+          done
+          cat /tmp/taskwarrior-web-smoke.log
+          exit 1
       - name: Chrome Shell Parity Tests
         run: |
           if ! command -v chromedriver > /dev/null 2>&1; then
@@ -113,6 +136,7 @@ jobs:
             exit 1
           fi
           export CHROME_EXECUTABLE="$chrome_bin"
+          echo "$chrome_bin" > /tmp/chrome-executable
           chromedriver --port=4444 > /tmp/chromedriver.log 2>&1 &
           driver_pid="$!"
           trap 'kill "$driver_pid"' EXIT
@@ -122,6 +146,20 @@ jobs:
             --chrome-binary="$chrome_bin" \
             --driver=test_driver/integration_test.dart \
             --target=integration_test/shell_parity_test.dart \
+            --no-web-resources-cdn
+      - name: Chrome Backend Smoke Test
+        run: |
+          chrome_bin="$(cat /tmp/chrome-executable)"
+          chromedriver --port=4444 > /tmp/chromedriver.log 2>&1 &
+          driver_pid="$!"
+          trap 'kill "$driver_pid"' EXIT
+          flutter drive \
+            -d web-server \
+            --browser-name=chrome \
+            --chrome-binary="$chrome_bin" \
+            --driver=test_driver/integration_test.dart \
+            --target=integration_test/web_backend_smoke_test.dart \
+            --dart-define=BACKEND_URL=http://127.0.0.1:38182 \
             --no-web-resources-cdn
       - name: Firefox Shell Parity Tests
         run: |
@@ -138,6 +176,24 @@ jobs:
             --driver=test_driver/integration_test.dart \
             --target=integration_test/shell_parity_test.dart \
             --no-web-resources-cdn
+      - name: Firefox Backend Smoke Test
+        run: |
+          geckodriver --port 4444 > /tmp/geckodriver.log 2>&1 &
+          driver_pid="$!"
+          trap 'kill "$driver_pid"' EXIT
+          flutter drive \
+            -d web-server \
+            --browser-name=firefox \
+            --driver=test_driver/integration_test.dart \
+            --target=integration_test/web_backend_smoke_test.dart \
+            --dart-define=BACKEND_URL=http://127.0.0.1:38182 \
+            --no-web-resources-cdn
+      - name: Stop Rust Test Backend
+        if: always()
+        run: |
+          if [ -f /tmp/taskwarrior-web-smoke.pid ]; then
+            kill "$(cat /tmp/taskwarrior-web-smoke.pid)" || true
+          fi
 
   build-web:
     runs-on: ubuntu-latest
